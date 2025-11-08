@@ -28,10 +28,15 @@ pub enum Color {
 pub struct Piece {
     pub kind: PieceType,
     pub color: Color,
+    pub has_moved: Option<bool>,
 }
 
 impl Piece {
     pub fn new(kind: PieceType, color: Color) -> Piece {
-        Piece { kind, color }
+        Piece {
+            kind,
+            color,
+            has_moved: Some(false), 
+        }
     }
 }
