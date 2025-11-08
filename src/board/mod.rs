@@ -11,8 +11,8 @@
 pub mod square;
 pub use square::Square;
 
-use crate::pieces::{PieceType, Color, Piece }; // Import from pieces module
-use crate::BOARD_SIZE; // Import board size constant
+use crate::pieces::{ PieceType, Color, Piece }; // Import from pieces module
+use crate::config::BOARD_SIZE; // Import board size constant
 use crate::gates::{ GateType };
 
 pub fn create_board() -> [[Square; BOARD_SIZE]; BOARD_SIZE] {
