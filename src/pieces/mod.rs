@@ -31,7 +31,7 @@ pub struct Piece {
 }
 
 impl Piece {
-    fn new(kind: PieceType, color: Color) -> Piece {
+    pub fn new(kind: PieceType, color: Color) -> Piece {
         Piece { kind, color }
     }
 }

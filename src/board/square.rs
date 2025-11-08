@@ -11,13 +11,14 @@
 use crate::pieces::{ Piece }; // Import from pieces module
 use crate::gates::{ GateType };
 
+#[derive(Clone, Copy, Debug)]
 pub struct Square {
     pub piece: Option<Piece>,
     pub gate: Option<GateType>,
 }
 
 impl Square {
-    fn new() -> Square {
+    pub fn new() -> Square {
         Square {
             piece: None,
             gate: None,

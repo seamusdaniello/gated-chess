@@ -12,11 +12,10 @@ mod board;   // Loads board module
 mod pieces;  // Loads pieces module
 mod gates;   // Loads gates module
 
-// Bring specific items into scope
-use pieces::{Piece, PieceType, Color};
-use gates;
+use crate::gates::{ update_gates, GateType };
+use crate::board::{ create_board, print_board };
 
-use std::io::{self, Write};
+use std::io::{self};
 
 const BOARD_SIZE: usize = 8;
 

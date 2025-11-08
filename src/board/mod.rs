@@ -11,11 +11,44 @@
 pub mod square;
 pub use square::Square;
 
-use crate::pieces::{PieceType, Color}; // Import from pieces module
+use crate::pieces::{PieceType, Color, Piece }; // Import from pieces module
 use crate::BOARD_SIZE; // Import board size constant
 use crate::gates::{ GateType };
 
-fn print_board(board: &[[Square; BOARD_SIZE]; BOARD_SIZE]) {
+pub fn create_board() -> [[Square; BOARD_SIZE]; BOARD_SIZE] {
+    let mut board = [[Square::new(); BOARD_SIZE]; BOARD_SIZE];
+
+    // Place White pawns
+    for i in 0..BOARD_SIZE {
+        board[1][i].piece = Some(Piece::new(crate::pieces::PieceType::Pawn, crate::pieces::Color::White));
+    }
+
+    // Place Black pawns
+    for i in 0..BOARD_SIZE {
+        board[6][i].piece = Some(Piece::new(crate::pieces::PieceType::Pawn, crate::pieces::Color::Black));
+    }
+
+    // Place other pieces
+    let piece_order = [
+        crate::pieces::PieceType::Rook,
+        crate::pieces::PieceType::Knight,
+        crate::pieces::PieceType::Bishop,
+        crate::pieces::PieceType::Queen,
+        crate::pieces::PieceType::King,
+        crate::pieces::PieceType::Bishop,
+        crate::pieces::PieceType::Knight,
+        crate::pieces::PieceType::Rook,
+    ];
+
+    for (i, &kind) in piece_order.iter().enumerate() {
+        board[0][i].piece = Some(Piece::new(kind, crate::pieces::Color::White));
+        board[7][i].piece = Some(Piece::new(kind, crate::pieces::Color::Black));
+    }
+
+    board
+}
+
+pub fn print_board(board: &[[Square; BOARD_SIZE]; BOARD_SIZE]) {
     println!();
     for row in board.iter().rev() { // Print from top (row 7) to bottom (row 0)
         for square in row.iter() {

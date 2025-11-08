@@ -11,12 +11,14 @@
 use crate::BOARD_SIZE;
 use crate::board::Square;
 
+#[derive(Clone, Copy, Debug)]
+
 pub enum GateType {
     Standard { duration: u8 },
     Decay { duration: u8 },
 }
 
-fn update_gates(board: &mut [[Square; BOARD_SIZE]; BOARD_SIZE]) {
+pub fn update_gates(board: &mut [[Square; BOARD_SIZE]; BOARD_SIZE]) {
     for row in board.iter_mut() {
         for square in row.iter_mut() {
             if let Some(gate) = &mut square.gate {

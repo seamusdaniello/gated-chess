@@ -1,1 +1,1 @@
-/Users/seamusdaniello/gatedChess/gated_chess/target/debug/gated_chess: /Users/seamusdaniello/gatedChess/gated_chess/src/main.rs
+/Users/seamusdaniello/gatedChess/gated_chess/target/debug/gated_chess: /Users/seamusdaniello/gatedChess/gated_chess/src/board/mod.rs /Users/seamusdaniello/gatedChess/gated_chess/src/board/square.rs /Users/seamusdaniello/gatedChess/gated_chess/src/gates/mod.rs /Users/seamusdaniello/gatedChess/gated_chess/src/main.rs /Users/seamusdaniello/gatedChess/gated_chess/src/pieces/mod.rs
