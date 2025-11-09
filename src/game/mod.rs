@@ -103,10 +103,6 @@ impl Game {
         Ok(())
     }
 
-    pub(crate) fn make_move_unchecked(&mut self, from: Position, to: Position) {
-        self.board[to.row][to.col].piece = self.board[from.row][from.col].piece.take();
-    }
-
     pub fn switch_turn(&mut self) {
         self.current_turn = match self.current_turn {
             Color::White => Color::Black,
@@ -146,37 +142,6 @@ impl Game {
         } else {
             None
         }
-    }
-
-    pub(crate) fn can_move_to(&self, pos: Position, color: Color) -> bool {
-        if let Some(piece) = self.board[pos.row][pos.col].piece {
-            piece.color != color
-        } else {
-            true
-        }
-    }
-
-    pub(crate) fn slide_in_direction(&self, pos: Position, dr: i32, dc: i32, color: Color) -> Vec<Position> {
-        let mut moves = Vec::new();
-        let mut current = pos;
-        
-        loop {
-            if let Some(next) = self.apply_offset(current, dr, dc) {
-                if let Some(piece) = self.board[next.row][next.col].piece {
-                    if piece.color != color {
-                        moves.push(next);
-                    }
-                    break;
-                } else {
-                    moves.push(next);
-                    current = next;
-                }
-            } else {
-                break;
-            }
-        }
-        
-        moves
     }
 
     pub(crate) fn is_king_in_check(&self, color: Color) -> bool {
@@ -246,5 +211,95 @@ impl Game {
             }
         }
         None
+    }
+
+    pub(crate) fn get_path_between(&self, from: Position, to: Position) -> Vec<Position> {
+        let mut path = Vec::new();
+
+        let dr = to.row as i32 - from.row as i32;
+        let dc = to.col as i32 - from.col as i32;
+
+        if dr == 0 || dc == 0 || dr.abs() == dc.abs() {
+            let steps = dr.abs().max(dc.abs()) as usize;
+
+            if steps > 1 {
+                let dr_step = if dr != 0 { dr / dr.abs() } else { 0 };
+                let dc_step = if dc != 0 { dc / dc.abs() } else { 0 };
+
+                for i in 1..steps {
+                    if let Some(pos) = self.apply_offset(from, dr_step * i as i32, dc_step * i as i32) {
+                        path.push(pos);
+                    }
+                }
+            }
+        }
+        path
+    }
+
+    pub(crate) fn make_move_unchecked(&mut self, from: Position, to: Position) {
+        // Get the piece before moving
+        let piece = self.board[from.row][from.col].piece;
+        
+        // Move the piece
+        self.board[to.row][to.col].piece = self.board[from.row][from.col].piece.take();
+        
+        // Create gates for rook/bishop moves
+        if let Some(p) = piece {
+            match p.kind {
+                PieceType::Rook | PieceType::Bishop => {
+                    let path = self.get_path_between(from, to);
+                    for pos in path {
+                        // Only create gate if square is empty (don't overwrite pieces)
+                        if self.board[pos.row][pos.col].piece.is_none() {
+                            self.board[pos.row][pos.col].gate = Some(
+                                crate::gates::GateType::Standard { duration: 1 }
+                            );
+                        }
+                    }
+                }
+                _ => {} // Other pieces don't create gates
+            }
+        }
+    }
+
+    pub(crate) fn slide_in_direction(&self, pos: Position, dr: i32, dc: i32, color: Color) -> Vec<Position> {
+        let mut moves = Vec::new();
+        let mut current = pos;
+        
+        loop {
+            if let Some(next) = self.apply_offset(current, dr, dc) {
+                // Check for gates first - gates block movement
+                if self.board[next.row][next.col].gate.is_some() {
+                    break; // Gate blocks movement
+                }
+                
+                // Then check for pieces
+                if let Some(piece) = self.board[next.row][next.col].piece {
+                    if piece.color != color {
+                        moves.push(next);
+                    }
+                    break;
+                } else {
+                    moves.push(next);
+                    current = next;
+                }
+            } else {
+                break;
+            }
+        }
+        
+        moves
+    }
+
+    pub(crate) fn can_move_to(&self, pos: Position, color: Color) -> bool {
+        if self.board[pos.row][pos.col].gate.is_some() {
+            return false;
+        }
+
+        if let Some(piece) = self.board[pos.row][pos.col].piece {
+            piece.color != color
+        } else {
+            true
+        }
     }
 }
