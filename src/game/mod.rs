@@ -252,7 +252,7 @@ impl Game {
                         // Only create gate if square is empty (don't overwrite pieces)
                         if self.board[pos.row][pos.col].piece.is_none() {
                             self.board[pos.row][pos.col].gate = Some(
-                                crate::gates::GateType::Standard { duration: 1 }
+                                crate::gates::GateType::Standard { duration: 2 }
                             );
                         }
                     }

@@ -68,8 +68,8 @@ pub fn print_board(board: &[[Square; BOARD_SIZE]; BOARD_SIZE]) {
                 print!("{} ", display);
             } else if let Some(gate) = square.gate {
                 match gate {
-                    GateType::Standard { duration } => print!("S "),
-                    GateType::Decay { duration } => print!("D "),
+                    GateType::Standard { duration } => print!("S"),
+                    GateType::Decay { duration } => print!("D"),
                 }
             } else {
                 print!(". "); // empty square
