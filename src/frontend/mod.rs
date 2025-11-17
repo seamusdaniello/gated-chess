@@ -15,10 +15,13 @@ pub async fn run_ui(mut game: Game) {
 
     let piece_textures = PieceTextures::load().await;
 
+    let light_tile = load_texture("images/panel/white-panel.png").await.unwrap();
+    let dark_tile = load_texture("images/panel/black-panel.png").await.unwrap();
+
     loop {
         clear_background(BLACK);
 
-        draw_board(&game);
+        draw_board(&game, &light_tile, &dark_tile);
         draw_pieces(&game, &piece_textures);
 
         draw_selected();
@@ -33,29 +36,28 @@ pub async fn run_ui(mut game: Game) {
     }
 }
 
-fn draw_board(game: &Game) {
-    let light_crimson = Color::from_rgba(198, 176, 96, 255);
-    let muted_navy   = Color::from_rgba(100, 149, 237, 255);
+fn draw_board(game: &Game, light: &Texture2D, dark: &Texture2D) {
     let gate_color = BLACK;
 
     for row in 0..8 {
         for col in 0..8 {
-            let square = &game.board[row][col];
-
-            let color = if square.gate.is_some() {
-                gate_color
+            let tex = if game.board[row][col].gate.is_some() {
+                light
             } else if (row + col) % 2 == 0 {
-                light_crimson
+                light
             } else {
-                muted_navy
+                dark
             };
 
-            draw_rectangle(
+            draw_texture_ex(
+                tex,
                 col as f32 * TILE_SIZE,
                 row as f32 * TILE_SIZE,
-                TILE_SIZE,
-                TILE_SIZE,
-                color,
+                WHITE,
+                DrawTextureParams {
+                    dest_size: Some(vec2(TILE_SIZE, TILE_SIZE)),
+                    ..Default::default()
+                },
             );
         }
     }

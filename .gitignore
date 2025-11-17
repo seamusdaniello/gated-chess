@@ -1,0 +1,4 @@
+# Ignore build output
+/target/
+# VS Code
+.vscode/
