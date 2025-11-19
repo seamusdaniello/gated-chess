@@ -1,4 +1,5 @@
 use macroquad::prelude::*;
+use macroquad::camera::*;
 use crate::game::{Game, Position};
 use crate::gates::GateType;
 use crate::pieces::{PieceType, Piece};
@@ -18,18 +19,34 @@ pub async fn run_ui(mut game: Game) {
     let light_tile = load_texture("images/panel/white-panel.png").await.unwrap();
     let dark_tile = load_texture("images/panel/black-panel.png").await.unwrap();
 
+    // ---- Store the camera here ----
+    let mut camera = Camera2D {
+        target: vec2(8.0 * TILE_SIZE / 2.0, 8.0 * TILE_SIZE / 2.0),
+        zoom: vec2(2.0 / screen_width(), -2.0 / screen_height()),
+        ..Default::default()
+    };
+
     loop {
         clear_background(BLACK);
 
+        // Update rotation depending on turn
+        camera.rotation = if game.current_turn == crate::pieces::Color::Black {
+            std::f32::consts::PI
+        } else {
+            0.0
+        };
+
+        set_camera(&camera);
+
         draw_board(&game, &light_tile, &dark_tile);
         draw_pieces(&game, &piece_textures);
-
         draw_selected();
 
-        if let Some((from, to)) = process_click() {
-            dbg!("UI Clicked!");
+        set_default_camera(); // return to UI space
+
+        if let Some((from, to)) = process_click(&game, &camera) {
             let _ = game.make_move(from, to);
-            unsafe { SELECTED = None; } // reset selection after move
+            unsafe { SELECTED = None; }
         }
 
         next_frame().await;
@@ -103,21 +120,33 @@ fn draw_pieces(game: &Game, textures: &PieceTextures) {
 } // <-- close the function
 
 
-fn process_click() -> Option<(Position, Position)> {
+fn process_click(game: &Game, camera: &Camera2D) -> Option<(Position, Position)> {
     if is_mouse_button_pressed(MouseButton::Left) {
-        let mouse = mouse_position();
-        let col = (mouse.0 / TILE_SIZE) as usize;
-        let row = (mouse.1 / TILE_SIZE) as usize;
 
-        if row < 8 && col < 8 {
-            let pos = Position { row, col };
+        // Convert screen position → world position using the SAME camera
+        let world = camera.screen_to_world(mouse_position().into());
 
-            unsafe {
-                if let Some(from) = SELECTED {
-                    return Some((from, pos));
-                } else {
-                    SELECTED = Some(pos);
-                }
+        let mx = world.x;
+        let my = world.y;
+
+        if mx < 0.0 || my < 0.0 {
+            return None;
+        }
+
+        let col = (mx / TILE_SIZE).floor() as isize;
+        let row = (my / TILE_SIZE).floor() as isize;
+
+        if row < 0 || col < 0 || row >= 8 || col >= 8 {
+            return None;
+        }
+
+        let pos = Position { row: row as usize, col: col as usize };
+
+        unsafe {
+            if let Some(from) = SELECTED {
+                return Some((from, pos));
+            } else {
+                SELECTED = Some(pos);
             }
         }
     }
