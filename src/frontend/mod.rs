@@ -11,6 +11,7 @@ use load_pieces::PieceTextures;
 const TILE_SIZE: f32 = 80.0;
 
 static mut SELECTED: Option<Position> = None;
+static mut HOVERED: Option<Position> = None;
 
 pub async fn run_ui(mut game: Game) {
 
@@ -19,22 +20,41 @@ pub async fn run_ui(mut game: Game) {
     let light_tile = load_texture("images/panel/white-panel.png").await.unwrap();
     let dark_tile = load_texture("images/panel/black-panel.png").await.unwrap();
 
-    // ---- Store the camera here ----
+    let board_center = vec2(8.0 * TILE_SIZE / 2.0, 8.0 * TILE_SIZE / 2.0);
+
     let mut camera = Camera2D {
-        target: vec2(8.0 * TILE_SIZE / 2.0, 8.0 * TILE_SIZE / 2.0),
-        zoom: vec2(2.0 / screen_width(), -2.0 / screen_height()),
-        ..Default::default()
+    target: board_center,
+    zoom: vec2(2.0 / screen_width(), 2.0 / screen_height()), // remove negative y
+    rotation: 0.5,
+    ..Default::default()
     };
 
     loop {
         clear_background(BLACK);
 
-        // Update rotation depending on turn
-        camera.rotation = if game.current_turn == crate::pieces::Color::Black {
-            std::f32::consts::PI
+        let world = camera.screen_to_world(mouse_position().into());
+        let mx = world.x;
+        let my = world.y;
+
+        unsafe {
+            if mx >= 0.0 && my >= 0.0 && mx < 8.0 * TILE_SIZE && my < 8.0 * TILE_SIZE {
+                HOVERED = Some(Position {
+                    row: (my / TILE_SIZE).floor() as usize,
+                    col: (mx / TILE_SIZE).floor() as usize,
+                });
+            } else {
+                HOVERED = None;
+            }
+        }
+
+        // Update rotation and zoom depending on turn
+        if game.current_turn == crate::pieces::Color::White {
+            camera.rotation = 0.0;
+            camera.zoom = vec2(2.0 / screen_width(), -2.0 / screen_height());
         } else {
-            0.0
-        };
+            camera.rotation = 0.0;
+            camera.zoom = vec2(2.0 / screen_width(), 2.0 / screen_height());
+        }
 
         set_camera(&camera);
 
@@ -54,8 +74,6 @@ pub async fn run_ui(mut game: Game) {
 }
 
 fn draw_board(game: &Game, light: &Texture2D, dark: &Texture2D) {
-    let gate_color = BLACK;
-
     for row in 0..8 {
         for col in 0..8 {
             let tex = if game.board[row][col].gate.is_some() {
