@@ -8,42 +8,10 @@
 // License: MIT
 // =======================================================
 
-use crate::config::BOARD_SIZE;
-use crate::board::Square;
+pub mod gate_type;
+pub mod logic;
+pub mod actions;
 
-#[derive(Clone, Copy, Debug)]
-pub enum GateType {
-    Standard { duration: u8 },
-    Decay { duration: u8 },
-}
-
-pub fn update_gates(board: &mut [[Square; BOARD_SIZE]; BOARD_SIZE]) {
-    for row in board.iter_mut() {
-        for square in row.iter_mut() {
-            if let Some(gate) = square.gate {
-                match gate {
-                    GateType::Standard { duration } => {
-                        if duration > 0 {
-                            let new_duration = duration - 1;
-                            if new_duration == 0 {
-                                square.gate = None;
-                            } else {
-                                square.gate = Some(GateType::Standard { duration: new_duration });
-                            }
-                        }
-                    }
-                    GateType::Decay { duration } => {
-                        if duration > 0 {
-                            let new_duration = duration - 1;
-                            if new_duration == 0 {
-                                square.gate = None;
-                            } else {
-                                square.gate = Some(GateType::Decay { duration: new_duration });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+pub use gate_type::GateType;
+pub use logic::{update_gates, update_gate_animation};
+pub use actions::{set_gate, remove_gate};

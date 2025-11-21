@@ -15,6 +15,8 @@ use crate::gates::{ GateType };
 pub struct Square {
     pub piece: Option<Piece>,
     pub gate: Option<GateType>,
+    pub animation_frame: Option<usize>,
+    pub animation_direction: Option<i8>,
 }
 
 impl Square {
@@ -22,6 +24,8 @@ impl Square {
         Square {
             piece: None,
             gate: None,
+            animation_frame: None,
+            animation_direction: None,
         }
     }
 }

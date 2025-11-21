@@ -1,7 +1,10 @@
+use macroquad::prelude::coroutines::TimerDelayFuture;
 use macroquad::prelude::*;
 use macroquad::camera::*;
 use crate::game::{Game, Position};
 use crate::gates::GateType;
+use crate::gates::update_gate_animation;
+use crate::gates::update_gates;
 use crate::pieces::{PieceType, Piece};
 
 mod load_pieces;
@@ -16,31 +19,60 @@ static mut HOVERED: Option<Position> = None;
 pub async fn run_ui(mut game: Game) {
 
     let piece_textures = PieceTextures::load().await;
+    let mut last_turn = game.current_turn;
+
+    let gate_images = [
+        "images/gates/gate-1.png",
+        "images/gates/gate-2.png",
+        "images/gates/gate-3.png",
+        "images/gates/gate-4.png",
+        "images/gates/gate-5.png",
+        "images/gates/gate-6.png",
+        "images/gates/gate-7.png",
+        "images/gates/gate-8.png",
+    ];
+
+    let mut gate_textures = Vec::new();
+
+    for file in gate_images.iter() {
+        let tex = load_texture(file).await.unwrap();
+        gate_textures.push(tex);
+    }
 
     let light_tile = load_texture("images/panel/white-panel.png").await.unwrap();
     let dark_tile = load_texture("images/panel/black-panel.png").await.unwrap();
-
-    let board_center = vec2(8.0 * TILE_SIZE / 2.0, 8.0 * TILE_SIZE / 2.0);
-
-    let mut camera = Camera2D {
-    target: board_center,
-    zoom: vec2(2.0 / screen_width(), 2.0 / screen_height()), // remove negative y
-    rotation: 0.5,
-    ..Default::default()
-    };
+    let gate_tile = load_texture("images/gates/gate-1.png").await.unwrap();
 
     loop {
         clear_background(BLACK);
+
+        if game.current_turn != last_turn {
+            crate::gates::update_gates(&mut game);
+            last_turn = game.current_turn;
+        }
+
+        update_gate_animation(&mut game);
+        
+        let tile_size = f32::min(screen_width(), screen_height()) / 8.0;
+        let board_center = vec2(4.0 * tile_size, 4.0 * tile_size);
+
+            let mut camera = Camera2D {
+                target: board_center,
+                zoom: vec2(2.0 / screen_width(), 2.0 / screen_height()), // remove negative y
+                rotation: 0.5,
+                ..Default::default()
+            };
+
 
         let world = camera.screen_to_world(mouse_position().into());
         let mx = world.x;
         let my = world.y;
 
         unsafe {
-            if mx >= 0.0 && my >= 0.0 && mx < 8.0 * TILE_SIZE && my < 8.0 * TILE_SIZE {
+            if mx >= 0.0 && my >= 0.0 && mx < 8.0 * tile_size && my < 8.0 * tile_size {
                 HOVERED = Some(Position {
-                    row: (my / TILE_SIZE).floor() as usize,
-                    col: (mx / TILE_SIZE).floor() as usize,
+                    row: (my / tile_size).floor() as usize,
+                    col: (mx / tile_size).floor() as usize,
                 });
             } else {
                 HOVERED = None;
@@ -58,13 +90,13 @@ pub async fn run_ui(mut game: Game) {
 
         set_camera(&camera);
 
-        draw_board(&game, &light_tile, &dark_tile);
-        draw_pieces(&game, &piece_textures);
-        draw_selected();
+        draw_board(&game, &light_tile, &dark_tile, &gate_textures, tile_size);
+        draw_pieces(&game, &piece_textures, &camera, tile_size);
+        draw_selected(tile_size);
 
         set_default_camera(); // return to UI space
 
-        if let Some((from, to)) = process_click(&game, &camera) {
+        if let Some((from, to)) = process_click(&game, &camera, tile_size) {
             let _ = game.make_move(from, to);
             unsafe { SELECTED = None; }
         }
@@ -73,11 +105,12 @@ pub async fn run_ui(mut game: Game) {
     }
 }
 
-fn draw_board(game: &Game, light: &Texture2D, dark: &Texture2D) {
+fn draw_board(game: &Game, light: &Texture2D, dark: &Texture2D, gates: &[Texture2D], tile_size: f32) {
     for row in 0..8 {
         for col in 0..8 {
-            let tex = if game.board[row][col].gate.is_some() {
-                light
+            let tex: &Texture2D = if game.board[row][col].gate.is_some() {
+                let frame = game.board[row][col].animation_frame.unwrap_or(0);
+                &gates[frame]
             } else if (row + col) % 2 == 0 {
                 light
             } else {
@@ -86,11 +119,11 @@ fn draw_board(game: &Game, light: &Texture2D, dark: &Texture2D) {
 
             draw_texture_ex(
                 tex,
-                col as f32 * TILE_SIZE,
-                row as f32 * TILE_SIZE,
+                col as f32 * tile_size,
+                row as f32 * tile_size,
                 WHITE,
                 DrawTextureParams {
-                    dest_size: Some(vec2(TILE_SIZE, TILE_SIZE)),
+                    dest_size: Some(vec2(tile_size, tile_size)),
                     ..Default::default()
                 },
             );
@@ -98,47 +131,39 @@ fn draw_board(game: &Game, light: &Texture2D, dark: &Texture2D) {
     }
 }
 
-fn draw_pieces(game: &Game, textures: &PieceTextures) {
+fn draw_pieces(game: &Game, textures: &PieceTextures, camera: &Camera2D, current_tile_size: f32) {
     for row in 0..8 {
         for col in 0..8 {
             if let Some(piece) = game.board[row][col].piece {
                 if let Some(tex) = textures.get(piece.kind, piece.color) {
+                    // Calculate piece position
+                    let mut draw_pos = vec2(col as f32 * current_tile_size, row as f32 * current_tile_size);
+
+                    // Flip the position for black pieces relative to camera
+                    let rotation = match game.current_turn {
+                        crate::pieces::Color::White => camera.rotation + (std::f32::consts::PI * 1.0),
+                        crate::pieces::Color::Black => camera.rotation, // upside down
+                    };
+
                     draw_texture_ex(
                         tex,
-                        col as f32 * TILE_SIZE,
-                        row as f32 * TILE_SIZE,
+                        draw_pos.x,
+                        draw_pos.y,
                         WHITE,
                         DrawTextureParams {
-                            dest_size: Some(vec2(TILE_SIZE, TILE_SIZE)),
+                            dest_size: Some(vec2(current_tile_size, current_tile_size)),
+                            rotation,
+                            pivot: None,
                             ..Default::default()
                         },
-                    );
-                } else {
-                    // fallback to text if no texture is available
-                    let symbol = match piece.kind {
-                        PieceType::Pawn => "♙",
-                        PieceType::Knight => "♘",
-                        PieceType::Bishop => "♗",
-                        PieceType::Rook => "♖",
-                        PieceType::Queen => "♕",
-                        PieceType::King => "♔",
-                    };
-                    let color = if piece.color == crate::pieces::Color::White { WHITE } else { BLACK };
-                    draw_text(
-                        symbol,
-                        col as f32 * TILE_SIZE + 25.0,
-                        row as f32 * TILE_SIZE + 55.0,
-                        50.0,
-                        color
                     );
                 }
             }
         }
-    } // <-- close the loops
-} // <-- close the function
+    }
+}
 
-
-fn process_click(game: &Game, camera: &Camera2D) -> Option<(Position, Position)> {
+fn process_click(game: &Game, camera: &Camera2D, current_tile_size: f32) -> Option<(Position, Position)> {
     if is_mouse_button_pressed(MouseButton::Left) {
 
         // Convert screen position → world position using the SAME camera
@@ -151,8 +176,8 @@ fn process_click(game: &Game, camera: &Camera2D) -> Option<(Position, Position)>
             return None;
         }
 
-        let col = (mx / TILE_SIZE).floor() as isize;
-        let row = (my / TILE_SIZE).floor() as isize;
+        let col = (mx / current_tile_size).floor() as isize;
+        let row = (my / current_tile_size).floor() as isize;
 
         if row < 0 || col < 0 || row >= 8 || col >= 8 {
             return None;
@@ -172,14 +197,14 @@ fn process_click(game: &Game, camera: &Camera2D) -> Option<(Position, Position)>
     None
 }
 
-fn draw_selected() {
+fn draw_selected(current_tile_size: f32) {
     unsafe {
         if let Some(pos) = SELECTED {
             draw_rectangle(
-                pos.col as f32 * TILE_SIZE,
-                pos.row as f32 * TILE_SIZE,
-                TILE_SIZE,
-                TILE_SIZE,
+                pos.col as f32 * current_tile_size,
+                pos.row as f32 * current_tile_size,
+                current_tile_size,
+                current_tile_size,
                 Color::from_rgba(255, 255, 0, 80)
             );
         }

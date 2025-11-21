@@ -10,6 +10,8 @@
 
 pub mod moves;
 
+use macroquad::rand::gen_range;
+
 use crate::board::Square;
 use crate::pieces::{Color, PieceType};
 use crate::config::BOARD_SIZE;
@@ -254,6 +256,8 @@ impl Game {
                             self.board[pos.row][pos.col].gate = Some(
                                 crate::gates::GateType::Standard { duration: 2 }
                             );
+                            self.board[pos.row][pos.col].animation_direction = Some(1);
+                            self.board[pos.row][pos.col].animation_frame = Some(gen_range(0, 7));
                         }
                     }
                 }
