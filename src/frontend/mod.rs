@@ -41,9 +41,12 @@ pub async fn run_ui(mut game: Game) {
 
     let light_tile = load_texture("images/panel/white-panel.png").await.unwrap();
     let dark_tile = load_texture("images/panel/black-panel.png").await.unwrap();
-    let gate_tile = load_texture("images/gates/gate-1.png").await.unwrap();
+
+    let mut last_update = 0.0;
 
     loop {
+        let now = get_time();
+
         clear_background(BLACK);
 
         if game.current_turn != last_turn {
@@ -51,7 +54,10 @@ pub async fn run_ui(mut game: Game) {
             last_turn = game.current_turn;
         }
 
-        update_gate_animation(&mut game);
+        if now - last_update >= 0.5 {
+            update_gate_animation(&mut game);
+            last_update = now;
+        }
         
         let tile_size = f32::min(screen_width(), screen_height()) / 8.0;
         let board_center = vec2(4.0 * tile_size, 4.0 * tile_size);
