@@ -9,16 +9,32 @@ mod load_pieces;
 mod load_gates;
 mod load_frame;
 mod move_history;
+mod game_over;
+mod start_menu;
 
 use load_pieces::PieceTextures;
 use load_gates::GateTextures;
 use load_frame::BoardFrame;
 use move_history::MoveHistory;
+use game_over::GameOverBanner;
+use start_menu::StartMenu;
 
 static mut SELECTED: Option<Position> = None;
 static mut HOVERED: Option<Position> = None;
 
 pub async fn run_ui(mut game: Game) {
+
+    let mut in_menu = true;
+
+    while in_menu {
+        clear_background(BLACK);
+
+        if StartMenu::draw() {
+            in_menu = false;
+        }
+
+        next_frame().await;
+    }
 
     let board_frame = BoardFrame::load("images/frames/frame-1.png").await;
     let piece_textures = PieceTextures::load().await;
@@ -29,33 +45,37 @@ pub async fn run_ui(mut game: Game) {
     let dark_tile = load_texture("images/panel/black-panel.png").await.unwrap();
 
     let mut last_update = 0.0;
-    let mut move_history = MoveHistory::new(); // Create move history instance
+    let mut move_history = MoveHistory::new();
 
+    let mut game_over = false;
+    let mut winner: Option<crate::pieces::Color> = None;
+    
     loop {
         let now = get_time();
 
         clear_background(BLACK);
 
-        if game.current_turn != last_turn {
-            update_gates(&mut game);
-            last_turn = game.current_turn;
-        }
+        if !game_over {
+            if game.current_turn != last_turn {
+                update_gates(&mut game);
+                last_turn = game.current_turn;
+            }
 
-        if now - last_update >= 0.5 {
-            update_gate_animation(&mut game);
-            last_update = now;
+            if now - last_update >= 0.5 {
+                update_gate_animation(&mut game);
+                last_update = now;
+            }
         }
         
         let tile_size = f32::min(screen_width(), screen_height()) / 8.0;
         let board_center = vec2(4.0 * tile_size, 4.0 * tile_size);
 
-            let mut camera = Camera2D {
-                target: board_center,
-                zoom: vec2(2.0 / screen_width(), 2.0 / screen_height()), // remove negative y
-                rotation: 0.5,
-                ..Default::default()
-            };
-
+        let mut camera = Camera2D {
+            target: board_center,
+            zoom: vec2(2.0 / screen_width(), 2.0 / screen_height()),
+            rotation: 0.5,
+            ..Default::default()
+        };
 
         let world = camera.screen_to_world(mouse_position().into());
         let mx = world.x;
@@ -88,18 +108,37 @@ pub async fn run_ui(mut game: Game) {
         draw_pieces(&game, &piece_textures, &camera, tile_size);
         draw_selected(tile_size);
 
-        set_default_camera(); // return to UI space
+        set_default_camera();
 
-        // Process clicks and add to move history when successful
-        if let Some((from, to)) = process_click(&game, &camera, tile_size) {
-            if game.make_move(from, to).is_ok() {
-                move_history.add_move(from, to); // Add move to history
+        // Process clicks only if game is not over
+        if !game_over {
+            if let Some((from, to)) = process_click(&game, &camera, tile_size) {
+                if game.make_move(from, to).is_ok() {
+                    move_history.add_move(from, to);
+
+                    if game.is_checkmate(game.current_turn) {
+                        game_over = true;
+                        winner = Some(if game.current_turn == White { Black } else { White });
+                    } else if game.is_stalemate(game.current_turn) {
+                        game_over = true;
+                        winner = None;
+                    }
+                }
+                unsafe { SELECTED = None; }
             }
-            unsafe { SELECTED = None; }
         }
 
-        // Draw move history panel (in UI space, after set_default_camera)
+        // Draw move history panel
         move_history.draw(tile_size);
+
+        // Draw game over banner if game ended
+        if game_over {
+            GameOverBanner::draw(winner);
+            
+            if is_key_pressed(KeyCode::Escape) {
+                break;
+            }
+        }
 
         next_frame().await;
     }
