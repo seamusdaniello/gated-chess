@@ -47,7 +47,6 @@ pub fn update_gate_animation(game: &mut Game) {
     for row in game.board.iter_mut() {
         for square in row.iter_mut() {
             if square.gate.is_some() {
-                dbg!("Made it here!");
                 // Initialize if None
                 let frame = square.animation_frame.get_or_insert(0);
                 let dir = square.animation_direction.get_or_insert(1);

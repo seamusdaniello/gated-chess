@@ -1,43 +1,27 @@
-use macroquad::prelude::coroutines::TimerDelayFuture;
 use macroquad::prelude::*;
-use macroquad::camera::*;
 use crate::game::{Game, Position};
-use crate::gates::GateType;
 use crate::gates::update_gate_animation;
 use crate::gates::update_gates;
-use crate::pieces::{PieceType, Piece};
+
+use crate::pieces::Color::{White, Black};
 
 mod load_pieces;
+mod load_gates;
+mod load_frame;
 
 use load_pieces::PieceTextures;
-
-const TILE_SIZE: f32 = 80.0;
+use load_gates::GateTextures;
+use load_frame::BoardFrame;
 
 static mut SELECTED: Option<Position> = None;
 static mut HOVERED: Option<Position> = None;
 
 pub async fn run_ui(mut game: Game) {
 
+    let board_frame = BoardFrame::load("images/frames/frame-1.png").await;
     let piece_textures = PieceTextures::load().await;
+    let gate_textures = GateTextures::load().await;
     let mut last_turn = game.current_turn;
-
-    let gate_images = [
-        "images/gates/gate-1.png",
-        "images/gates/gate-2.png",
-        "images/gates/gate-3.png",
-        "images/gates/gate-4.png",
-        "images/gates/gate-5.png",
-        "images/gates/gate-6.png",
-        "images/gates/gate-7.png",
-        "images/gates/gate-8.png",
-    ];
-
-    let mut gate_textures = Vec::new();
-
-    for file in gate_images.iter() {
-        let tex = load_texture(file).await.unwrap();
-        gate_textures.push(tex);
-    }
 
     let light_tile = load_texture("images/panel/white-panel.png").await.unwrap();
     let dark_tile = load_texture("images/panel/black-panel.png").await.unwrap();
@@ -50,7 +34,7 @@ pub async fn run_ui(mut game: Game) {
         clear_background(BLACK);
 
         if game.current_turn != last_turn {
-            crate::gates::update_gates(&mut game);
+            update_gates(&mut game);
             last_turn = game.current_turn;
         }
 
@@ -86,7 +70,7 @@ pub async fn run_ui(mut game: Game) {
         }
 
         // Update rotation and zoom depending on turn
-        if game.current_turn == crate::pieces::Color::White {
+        if game.current_turn == White {
             camera.rotation = 0.0;
             camera.zoom = vec2(2.0 / screen_width(), -2.0 / screen_height());
         } else {
@@ -96,7 +80,8 @@ pub async fn run_ui(mut game: Game) {
 
         set_camera(&camera);
 
-        draw_board(&game, &light_tile, &dark_tile, &gate_textures, tile_size);
+        board_frame.draw(tile_size);
+        draw_board(&game, &light_tile, &dark_tile, &gate_textures.tex_vector, tile_size);
         draw_pieces(&game, &piece_textures, &camera, tile_size);
         draw_selected(tile_size);
 
@@ -147,8 +132,8 @@ fn draw_pieces(game: &Game, textures: &PieceTextures, camera: &Camera2D, current
 
                     // Flip the position for black pieces relative to camera
                     let rotation = match game.current_turn {
-                        crate::pieces::Color::White => camera.rotation + (std::f32::consts::PI * 1.0),
-                        crate::pieces::Color::Black => camera.rotation, // upside down
+                        White => camera.rotation + (std::f32::consts::PI * 1.0),
+                        Black => camera.rotation, // upside down
                     };
 
                     draw_texture_ex(
