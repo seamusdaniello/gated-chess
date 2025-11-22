@@ -8,10 +8,12 @@ use crate::pieces::Color::{White, Black};
 mod load_pieces;
 mod load_gates;
 mod load_frame;
+mod move_history;
 
 use load_pieces::PieceTextures;
 use load_gates::GateTextures;
 use load_frame::BoardFrame;
+use move_history::MoveHistory;
 
 static mut SELECTED: Option<Position> = None;
 static mut HOVERED: Option<Position> = None;
@@ -27,6 +29,7 @@ pub async fn run_ui(mut game: Game) {
     let dark_tile = load_texture("images/panel/black-panel.png").await.unwrap();
 
     let mut last_update = 0.0;
+    let mut move_history = MoveHistory::new(); // Create move history instance
 
     loop {
         let now = get_time();
@@ -87,10 +90,16 @@ pub async fn run_ui(mut game: Game) {
 
         set_default_camera(); // return to UI space
 
+        // Process clicks and add to move history when successful
         if let Some((from, to)) = process_click(&game, &camera, tile_size) {
-            let _ = game.make_move(from, to);
+            if game.make_move(from, to).is_ok() {
+                move_history.add_move(from, to); // Add move to history
+            }
             unsafe { SELECTED = None; }
         }
+
+        // Draw move history panel (in UI space, after set_default_camera)
+        move_history.draw(tile_size);
 
         next_frame().await;
     }
