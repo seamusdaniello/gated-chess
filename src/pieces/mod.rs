@@ -24,10 +24,30 @@ pub enum Color {
     Black,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PieceForm {
+    Base,
+    Corputed,
+    Ascended,
+    Fragmented,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PieceState {
+    Idle,
+    Selected,
+    Moving,
+    Morphing(PieceForm),
+    Attacking,
+    Dead,
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Piece {
     pub kind: PieceType,
     pub color: Color,
+    pub form: PieceForm,
+    pub state: PieceState,
     pub has_moved: Option<bool>,
 }
 
@@ -36,6 +56,8 @@ impl Piece {
         Piece {
             kind,
             color,
+            form: PieceForm::Base,
+            state: PieceState::Idle,
             has_moved: Some(false), 
         }
     }
