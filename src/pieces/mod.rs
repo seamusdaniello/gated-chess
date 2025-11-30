@@ -8,6 +8,9 @@
 // License: MIT
 // =======================================================
 
+pub mod piece_animations;
+use crate::pieces::piece_animations::{Animation, MorphAnimation};
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PieceType {
     Pawn,
