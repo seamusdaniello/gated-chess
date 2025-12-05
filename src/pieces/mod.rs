@@ -9,6 +9,7 @@
 // =======================================================
 
 pub mod piece_animations;
+pub mod piece_fsm;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PieceType {

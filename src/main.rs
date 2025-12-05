@@ -20,11 +20,9 @@ use crate::game::Game;
 
 #[macroquad::main("GatedChess")]
 async fn main() {
-    // create engine state
+        // create engine state
     let board = create_board();
     let game = Game::new(board);
 
-    // hand off control to the frontend UI loop
-    // frontend::run_ui should be `pub async fn run_ui(game: Game)` in src/frontend/mod.rs
     frontend::run_ui(game).await;
 }

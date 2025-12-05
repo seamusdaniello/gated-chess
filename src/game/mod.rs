@@ -9,12 +9,15 @@
 // =======================================================
 
 pub mod moves;
+pub mod state_machine;
 
 use macroquad::rand::gen_range;
 
 use crate::board::Square;
 use crate::pieces::{Color, PieceType};
 use crate::config::BOARD_SIZE;
+
+use crate::game::state_machine::GameStateManager;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Position {
@@ -50,14 +53,19 @@ pub enum GameResult {
 
 pub struct Game {
     pub board: [[Square; BOARD_SIZE]; BOARD_SIZE],
+    pub state_manager: GameStateManager,
     pub current_turn: Color,
     pub result: GameResult,
 }
 
 impl Game {
-    pub fn new(board: [[Square; BOARD_SIZE]; BOARD_SIZE]) -> Game {
+    pub fn new(mut board: [[Square; BOARD_SIZE]; BOARD_SIZE]) -> Game {
+        let mut state_manager= GameStateManager::new();
+        state_manager.register_all_pieces(&mut board);
+
         Game {
             board,
+            state_manager,
             current_turn: Color::White,
             result: GameResult::InProgress,
         }

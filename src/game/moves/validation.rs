@@ -8,6 +8,7 @@
 // License: MIT
 // =======================================================
 
+use crate::game::state_machine::GameStateManager;
 use crate::game::{Game, Position};
 use crate::pieces::Color;
 
@@ -22,6 +23,7 @@ impl Game {
         // Create temporary game to check for check
         let temp_game = Game {
             board: temp_board,
+            state_manager: GameStateManager::new(),
             current_turn: self.current_turn,
             result: crate::game::GameResult::InProgress,
         };
