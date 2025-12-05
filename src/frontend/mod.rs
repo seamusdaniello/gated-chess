@@ -176,7 +176,7 @@ fn draw_pieces(game: &Game, textures: &PieceTextures, camera: &Camera2D, current
             if let Some(piece) = game.board[row][col].piece {
                 if let Some(tex) = textures.get(piece.kind, piece.color) {
                     // Calculate piece position
-                    let mut draw_pos = vec2(col as f32 * current_tile_size, row as f32 * current_tile_size);
+                    let draw_pos = vec2(col as f32 * current_tile_size, row as f32 * current_tile_size);
 
                     // Flip the position for black pieces relative to camera
                     let rotation = match game.current_turn {

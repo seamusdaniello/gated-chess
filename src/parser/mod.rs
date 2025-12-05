@@ -12,4 +12,3 @@ mod algebraic;
 mod pgn;
 
 pub use algebraic::*;
-pub use pgn::*;

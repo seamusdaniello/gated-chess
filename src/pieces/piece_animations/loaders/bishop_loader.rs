@@ -1,3 +1,13 @@
+// =======================================================
+// Project: GatedChess
+// File: piece_animations/loaders/bishop_loader.rs
+// Description: Loads all animations for bishop FSMs.
+// Author: Seamus Daniello
+// Created: 2025-11-07
+// Last Modified: 2025-11-30
+// License: MIT
+// =======================================================
+
 use macroquad::prelude::*;
 
 pub async fn load_bishop_frames(color: &str) -> Vec<Texture2D> {

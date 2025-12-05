@@ -1,7 +1,4 @@
 use macroquad::prelude::*;
-use crate::game::{Game, Position};
-use crate::gates::update_gate_animation;
-use crate::gates::update_gates;
 
 pub struct GateTextures {
     pub tex_vector: Vec<Texture2D>,

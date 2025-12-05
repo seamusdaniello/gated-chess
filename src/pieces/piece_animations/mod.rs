@@ -11,6 +11,4 @@ pub mod loaders;
 pub mod idle;
 
 pub use morph::MorphAnimation;
-pub use loaders::load_bishop_frames;
 
-use crate::pieces::PieceType;

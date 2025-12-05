@@ -1,6 +1,5 @@
 use macroquad::prelude::*;
 use crate::game::Position;
-use crate::parser::parse_square;
 
 pub struct MoveHistory {
     moves: Vec<(Position, Position)>

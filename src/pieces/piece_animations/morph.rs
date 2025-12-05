@@ -1,3 +1,13 @@
+// =======================================================
+// Project: GatedChess
+// File: piece_animations/morph.rs
+// Description: Defines individual morph animations for piece FSMs.
+// Author: Seamus Daniello
+// Created: 2025-11-07
+// Last Modified: 2025-11-30
+// License: MIT
+// =======================================================
+
 use macroquad::prelude::*;
 use crate::pieces::Color;
 use super::Animation;

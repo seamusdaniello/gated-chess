@@ -4,12 +4,11 @@
 // Description: Defines pieces used in-game.
 // Author: Seamus Daniello
 // Created: 2025-11-07
-// Last Modified: 2025-11-07
+// Last Modified: 2025-11-30
 // License: MIT
 // =======================================================
 
 pub mod piece_animations;
-use crate::pieces::piece_animations::{Animation, MorphAnimation};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PieceType {
@@ -30,7 +29,7 @@ pub enum Color {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PieceForm {
     Base,
-    Corputed,
+    Corrupted,
     Ascended,
     Fragmented,
 }
@@ -45,8 +44,20 @@ pub enum PieceState {
     Dead,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PieceId(pub u32);
+
+static NEXT_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+impl PieceId {
+    pub fn new() -> Self {
+        PieceId(NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Piece {
+    pub id: PieceId,
     pub kind: PieceType,
     pub color: Color,
     pub form: PieceForm,
@@ -57,6 +68,7 @@ pub struct Piece {
 impl Piece {
     pub fn new(kind: PieceType, color: Color) -> Piece {
         Piece {
+            id: PieceId::new(),
             kind,
             color,
             form: PieceForm::Base,

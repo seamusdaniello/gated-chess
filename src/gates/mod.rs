@@ -14,4 +14,3 @@ pub mod actions;
 
 pub use gate_type::GateType;
 pub use logic::{update_gates, update_gate_animation};
-pub use actions::{set_gate, remove_gate};
