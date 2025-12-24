@@ -3,6 +3,7 @@ use crate::pieces::{Color, PieceType};
 use crate::pieces::piece_animations::loaders::bishop_loader;
 use crate::pieces::piece_animations::loaders::pawn_loader;
 use crate::pieces::piece_animations::loaders::knight_loader;
+use crate::pieces::piece_animations::loaders::rook_loader;
 use std::collections::HashMap;
 
 /// Represents different animation states for pieces
@@ -79,6 +80,7 @@ impl PieceTextures {
         Self::load_bishop_animations(&mut animations).await;
         Self::load_pawn_animations(&mut animations).await;
         Self::load_knight_animations(&mut animations).await;
+        Self::load_rook_animations(&mut animations).await;
         
         // Add more animation loaders here as you implement them:
         // Self::load_knight_animations(&mut animations).await;
@@ -131,6 +133,19 @@ impl PieceTextures {
             animations.insert(
                 (PieceType::Knight, Color::White, AnimationState::Idle),
                 white_knight_idle
+            );
+        }
+    }
+
+    async fn load_rook_animations(
+        animations: &mut HashMap<(PieceType, Color, AnimationState), Vec<Texture2D>>
+    ) {
+        // White Rook Idle Animation
+        let white_rook_idle = rook_loader::load_rook_frames("white").await;
+        if !white_rook_idle.is_empty() {
+            animations.insert(
+                (PieceType::Rook, Color::White, AnimationState::Idle),
+                white_rook_idle
             );
         }
     }
