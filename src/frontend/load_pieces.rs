@@ -2,6 +2,7 @@ use macroquad::prelude::*;
 use crate::pieces::{Color, PieceType};
 use crate::pieces::piece_animations::loaders::bishop_loader;
 use crate::pieces::piece_animations::loaders::pawn_loader;
+use crate::pieces::piece_animations::loaders::knight_loader;
 use std::collections::HashMap;
 
 /// Represents different animation states for pieces
@@ -77,6 +78,7 @@ impl PieceTextures {
         // Load animations using the dedicated loaders
         Self::load_bishop_animations(&mut animations).await;
         Self::load_pawn_animations(&mut animations).await;
+        Self::load_knight_animations(&mut animations).await;
         
         // Add more animation loaders here as you implement them:
         // Self::load_knight_animations(&mut animations).await;
@@ -116,6 +118,19 @@ impl PieceTextures {
             animations.insert(
                 (PieceType::Pawn, Color::White, AnimationState::Idle),
                 white_pawn_idle
+            );
+        }
+    }
+
+    async fn load_knight_animations(
+        animations: &mut HashMap<(PieceType, Color, AnimationState), Vec<Texture2D>>
+    ) {
+        // White Knight Idle Animation
+        let white_knight_idle = knight_loader::load_knight_frames("white").await;
+        if !white_knight_idle.is_empty() {
+            animations.insert(
+                (PieceType::Knight, Color::White, AnimationState::Idle),
+                white_knight_idle
             );
         }
     }
