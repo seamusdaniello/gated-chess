@@ -1,6 +1,7 @@
 use macroquad::prelude::*;
 use crate::pieces::{Color, PieceType};
 use crate::pieces::piece_animations::loaders::bishop_loader;
+use crate::pieces::piece_animations::loaders::pawn_loader;
 use std::collections::HashMap;
 
 /// Represents different animation states for pieces
@@ -75,6 +76,7 @@ impl PieceTextures {
 
         // Load animations using the dedicated loaders
         Self::load_bishop_animations(&mut animations).await;
+        Self::load_pawn_animations(&mut animations).await;
         
         // Add more animation loaders here as you implement them:
         // Self::load_knight_animations(&mut animations).await;
@@ -103,6 +105,19 @@ impl PieceTextures {
         //         black_bishop_idle
         //     );
         // }
+    }
+
+    async fn load_pawn_animations(
+        animations: &mut HashMap<(PieceType, Color, AnimationState), Vec<Texture2D>>
+    ) {
+        // White Pawn Idle Animation
+        let white_pawn_idle = pawn_loader::load_pawn_frames("white").await;
+        if !white_pawn_idle.is_empty() {
+            animations.insert(
+                (PieceType::Pawn, Color::White, AnimationState::Idle),
+                white_pawn_idle
+            );
+        }
     }
 
     /// Get the base texture for a piece (fallback if no animation)
