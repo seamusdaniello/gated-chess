@@ -28,6 +28,7 @@ struct PieceAnimationState {
     current_frame: usize,
     last_update: f32,
     frame_duration: f32, // seconds per frame
+    direction: i32,
 }
 
 impl PieceAnimationState {
@@ -36,12 +37,28 @@ impl PieceAnimationState {
             current_frame: 0,
             last_update: 0.0,
             frame_duration,
+            direction: 1,
         }
     }
 
     fn update(&mut self, current_time: f32, total_frames: usize) {
+        if total_frames == 0 {
+            return;
+        }
+
         if current_time - self.last_update >= self.frame_duration {
-            self.current_frame = (self.current_frame + 1) % total_frames;
+            let next = self.current_frame as i32 + self.direction;
+
+            if next >= total_frames as i32 {
+                self.direction = -1;
+                self.current_frame = total_frames.saturating_sub(2).max(0);
+            } else if next < 0 {
+                self.direction = 1;
+                self.current_frame = 1.min(total_frames - 1);
+            } else {
+                self.current_frame = next as usize;
+            }
+
             self.last_update = current_time;
         }
     }
