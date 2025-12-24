@@ -1,8 +1,10 @@
 use macroquad::prelude::*;
+use crate::frontend::load_pieces::AnimationState;
 use crate::game::{Game, Position};
 use crate::gates::update_gate_animation;
 use crate::gates::update_gates;
 use crate::pieces::Color::{White, Black};
+use crate::pieces::PieceType;
 
 mod load_pieces;
 mod load_gates;
@@ -18,12 +20,34 @@ use move_history::MoveHistory;
 use game_over::GameOverBanner;
 use start_menu::StartMenu;
 
-
 static mut SELECTED: Option<Position> = None;
 static mut HOVERED: Option<Position> = None;
 
-pub async fn run_ui(mut game: Game) {
+// Add animation state tracking
+struct PieceAnimationState {
+    current_frame: usize,
+    last_update: f32,
+    frame_duration: f32, // seconds per frame
+}
 
+impl PieceAnimationState {
+    fn new(frame_duration: f32) -> Self {
+        Self {
+            current_frame: 0,
+            last_update: 0.0,
+            frame_duration,
+        }
+    }
+
+    fn update(&mut self, current_time: f32, total_frames: usize) {
+        if current_time - self.last_update >= self.frame_duration {
+            self.current_frame = (self.current_frame + 1) % total_frames;
+            self.last_update = current_time;
+        }
+    }
+}
+
+pub async fn run_ui(mut game: Game) {
     let mut in_menu = true;
 
     while in_menu {
@@ -49,6 +73,9 @@ pub async fn run_ui(mut game: Game) {
 
     let mut game_over = false;
     let mut winner: Option<crate::pieces::Color> = None;
+    
+    // Initialize piece animation state
+    let mut piece_anim_state = PieceAnimationState::new(0.1); // 10 FPS animation
     
     loop {
         let now = get_time();
@@ -106,7 +133,8 @@ pub async fn run_ui(mut game: Game) {
         board_frame.draw(tile_size);
         draw_board(&game, &light_tile, &dark_tile, &gate_textures.tex_vector, tile_size);
         
-        draw_pieces(&game, &piece_textures, &camera, tile_size);
+        // Update and draw pieces with animations
+        draw_pieces(&game, &piece_textures, &camera, tile_size, &mut piece_anim_state, now as f32);
         draw_selected(tile_size);
 
         set_default_camera();
@@ -171,33 +199,52 @@ fn draw_board(game: &Game, light: &Texture2D, dark: &Texture2D, gates: &[Texture
     }
 }
 
-fn draw_pieces(game: &Game, textures: &PieceTextures, camera: &Camera2D, current_tile_size: f32) {
+fn draw_pieces(
+    game: &Game, 
+    textures: &PieceTextures, 
+    camera: &Camera2D, 
+    current_tile_size: f32,
+    anim_state: &mut PieceAnimationState,
+    current_time: f32,
+) {
     for row in 0..8 {
         for col in 0..8 {
             if let Some(piece) = game.board[row][col].piece {
-                if let Some(tex) = textures.get(piece.kind, piece.color) {
-                    // Calculate piece position
-                    let draw_pos = vec2(col as f32 * current_tile_size, row as f32 * current_tile_size);
+                // Try to get animation first, fall back to static texture
+                let tex = if let Some(frames) = textures.get_animation(piece.kind, piece.color, AnimationState::Idle) {
+                    // Update animation frame
+                    anim_state.update(current_time, frames.len());
+                    // Get current frame
+                    &frames[anim_state.current_frame]
+                } else {
+                    // Fall back to static texture if no animation exists
+                    match textures.get(piece.kind, piece.color) {
+                        Some(t) => t,
+                        None => continue, // Skip if no texture at all
+                    }
+                };
 
-                    // Flip the position for black pieces relative to camera
-                    let rotation = match game.current_turn {
-                        White => camera.rotation + (std::f32::consts::PI * 1.0),
-                        Black => camera.rotation, // upside down
-                    };
+                // Calculate piece position
+                let draw_pos = vec2(col as f32 * current_tile_size, row as f32 * current_tile_size);
 
-                    draw_texture_ex(
-                        tex,
-                        draw_pos.x,
-                        draw_pos.y,
-                        WHITE,
-                        DrawTextureParams {
-                            dest_size: Some(vec2(current_tile_size, current_tile_size)),
-                            rotation,
-                            pivot: None,
-                            ..Default::default()
-                        },
-                    );
-                }
+                // Flip the position for black pieces relative to camera
+                let rotation = match game.current_turn {
+                    White => camera.rotation + (std::f32::consts::PI * 1.0),
+                    Black => camera.rotation, // upside down
+                };
+
+                draw_texture_ex(
+                    tex,
+                    draw_pos.x,
+                    draw_pos.y,
+                    WHITE,
+                    DrawTextureParams {
+                        dest_size: Some(vec2(current_tile_size, current_tile_size)),
+                        rotation,
+                        pivot: None,
+                        ..Default::default()
+                    },
+                );
             }
         }
     }
@@ -205,7 +252,6 @@ fn draw_pieces(game: &Game, textures: &PieceTextures, camera: &Camera2D, current
 
 fn process_click(game: &Game, camera: &Camera2D, current_tile_size: f32) -> Option<(Position, Position)> {
     if is_mouse_button_pressed(MouseButton::Left) {
-
         // Convert screen position → world position using the SAME camera
         let world = camera.screen_to_world(mouse_position().into());
 

@@ -47,12 +47,10 @@ impl<'a> GameStateManager {
         self.piece_positions.insert(piece.id, pos);
     }
 
-    // Example: method that needs the board
     pub fn update_all_fsm(
         &mut self,
         board: &mut [[Square; crate::config::BOARD_SIZE]; crate::config::BOARD_SIZE],
     ) {
-
         let mut updates: Vec<(Position, Piece)> = Vec::new();
 
         for (piece_id, fsm) in self.piece_fsms.iter_mut() {
