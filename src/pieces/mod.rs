@@ -77,4 +77,28 @@ impl Piece {
             has_moved: Some(false), 
         }
     }
+
+    pub fn get_id(&self) -> PieceId {
+        return self.id;
+    }
+
+    pub fn get_kind(&self) -> PieceType {
+        return self.kind;
+    }
+
+    pub fn get_color(&self) -> Color {
+        return self.color;
+    }
+
+    pub fn get_form(&self) -> PieceForm {
+        return self.form;
+    }
+
+    pub fn get_state(&self) -> PieceState {
+        return self.state;
+    }
+
+    pub fn get_has_moved(&self) -> Option<bool> {
+        return self.has_moved;
+    }
 }

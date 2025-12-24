@@ -8,4 +8,6 @@ pub trait PieceFSM {
 
     fn piece(&self) -> &Piece;
     fn piece_mut(&mut self) -> &mut Piece;
+
+    fn check_idle(&mut self);
 }

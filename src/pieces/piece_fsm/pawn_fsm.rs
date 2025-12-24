@@ -29,4 +29,8 @@ impl PieceFSM for PawnFSM {
     fn piece_mut(&mut self) -> &mut Piece {
         &mut self.piece
     }
+
+    fn check_idle(&mut self) {
+        
+    }
 }

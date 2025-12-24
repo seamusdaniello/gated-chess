@@ -1,5 +1,5 @@
 use super::piece_fsm::PieceFSM;
-use crate::pieces::Piece;
+use crate::pieces::{Piece, PieceState};
 use crate::game::Position;
 
 pub struct BishopFSM {
@@ -21,4 +21,10 @@ impl PieceFSM for BishopFSM {
 
     fn piece(&self) -> &Piece { &self.piece }
     fn piece_mut(&mut self) -> &mut Piece { &mut self.piece }
+
+    fn check_idle(&mut self) {
+        if (self.piece.get_state() == PieceState::Idle) {
+            
+        }
+    }
 }

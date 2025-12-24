@@ -109,6 +109,8 @@ impl Game {
         self.switch_turn();
 
         self.check_game_result();
+
+        self.state_manager.update_all_fsm(&mut self.board);
         
         Ok(())
     }
@@ -249,6 +251,15 @@ impl Game {
     pub(crate) fn make_move_unchecked(&mut self, from: Position, to: Position) {
         // Get the piece before moving
         let piece = self.board[from.row][from.col].piece;
+
+        if let Some(p) = piece {
+            self.state_manager.piece_positions.insert(p.id, to);
+
+            if let Some(captured) = self.board[to.row][to.col].piece {
+                self.state_manager.piece_fsms.remove(&captured.id);
+                self.state_manager.piece_positions.remove(&captured.id);
+            }
+        }
         
         // Move the piece
         self.board[to.row][to.col].piece = self.board[from.row][from.col].piece.take();

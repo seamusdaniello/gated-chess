@@ -1,12 +1,12 @@
 use macroquad::prelude::*;
 use crate::pieces::Color;
 use crate::pieces::PieceType;
+use crate::pieces::piece_animations::loaders::bishop_loader;
 use std::collections::HashMap;
-use std::fs;
 
 pub struct PieceTextures {
     pub textures: HashMap<(PieceType, Color), Texture2D>,
-    pub animations: HashMap<(PieceType, Color), Vec<Texture2D>>,
+    pub animations: HashMap<(PieceType, Color, String), Vec<Texture2D>>, // Changed to String
 }
 
 impl PieceTextures {
@@ -14,10 +14,7 @@ impl PieceTextures {
         let mut textures = HashMap::new();
         let mut animations = HashMap::new();
 
-        // Define which folders we expect to contain animations (for now just bishop)
-        let animated_pieces = vec![(PieceType::Bishop, Color::White)];
-
-        // Base textures (same as before)
+        // Base textures (static fallback images)
         let base = vec![
             (PieceType::Pawn, Color::Black,  "images/black/pawn.png"),
             (PieceType::Pawn, Color::White,  "images/white/pawn.png"),
@@ -35,35 +32,22 @@ impl PieceTextures {
 
         for (kind, color, path) in base {
             let tex = load_texture(path).await.unwrap();
+            tex.set_filter(FilterMode::Nearest);
             textures.insert((kind, color), tex);
         }
 
-        // Load bishop animation frames
-        for (kind, color) in animated_pieces {
-            let folder = match color {
-                Color::White => format!("images/white/{:?}/", kind).to_lowercase(),
-                Color::Black => format!("images/black/{:?}/", kind).to_lowercase(),
-            };
-
-            if let Ok(files) = fs::read_dir(&folder) {
-                let mut frames = vec![];
-                let mut entries: Vec<_> = files.map(|f| f.unwrap().path()).collect();
-
-                // Sort numerically so 0.png,1.png,... stays in order
-                entries.sort();
-
-                for file in entries {
-                    if file.extension().and_then(|x| x.to_str()) == Some("png") {
-                        let tex = load_texture(file.to_str().unwrap()).await.unwrap();
-                        frames.push(tex);
-                    }
-                }
-
-                if !frames.is_empty() {
-                    animations.insert((kind, color), frames);
-                }
-            }
+        // Load animations using the dedicated loaders
+        // White Bishop Idle Animation
+        let white_bishop_idle = bishop_loader::load_bishop_frames("white").await;
+        if !white_bishop_idle.is_empty() {
+            animations.insert((PieceType::Bishop, Color::White, "idle".to_string()), white_bishop_idle);
         }
+
+        // Black Bishop Idle Animation (if you have it)
+        // let black_bishop_idle = bishop_loader::load_bishop_frames("black").await;
+        // if !black_bishop_idle.is_empty() {
+        //     animations.insert((PieceType::Bishop, Color::Black, "idle".to_string()), black_bishop_idle);
+        // }
 
         Self { textures, animations }
     }
@@ -72,7 +56,12 @@ impl PieceTextures {
         self.textures.get(&(kind, color))
     }
 
-    pub fn get_animation(&self, kind: PieceType, color: Color) -> Option<&Vec<Texture2D>> {
-        self.animations.get(&(kind, color))
+    pub fn get_animation(
+        &self, 
+        kind: PieceType, 
+        color: Color, 
+        state: &str
+    ) -> Option<&Vec<Texture2D>> {
+        self.animations.get(&(kind, color, state.to_string())) // Convert to String for lookup
     }
 }

@@ -52,9 +52,22 @@ impl<'a> GameStateManager {
         &mut self,
         board: &mut [[Square; crate::config::BOARD_SIZE]; crate::config::BOARD_SIZE],
     ) {
-        for fsm in self.piece_fsms.values_mut() {
+
+        let mut updates: Vec<(Position, Piece)> = Vec::new();
+
+        for (piece_id, fsm) in self.piece_fsms.iter_mut() {
             fsm.update_state();
-            // If you need the board for move generation or gates, pass it here
+
+            if let Some(&pos) = self.piece_positions.get(piece_id) {
+                let updated_piece = *fsm.piece();
+                updates.push((pos, updated_piece));
+            }
+        }
+        
+        for (pos, piece) in updates {
+            if board[pos.row][pos.col].piece.is_some() {
+                board[pos.row][pos.col].piece = Some(piece);
+            }
         }
     }
 }

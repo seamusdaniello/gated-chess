@@ -21,4 +21,8 @@ impl PieceFSM for KnightFSM {
 
     fn piece(&self) -> &Piece { &self.piece }
     fn piece_mut(&mut self) -> &mut Piece { &mut self.piece }
+
+    fn check_idle(&mut self) {
+        
+    }
 }

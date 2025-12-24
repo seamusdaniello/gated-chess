@@ -2,7 +2,6 @@ use macroquad::prelude::*;
 use crate::game::{Game, Position};
 use crate::gates::update_gate_animation;
 use crate::gates::update_gates;
-
 use crate::pieces::Color::{White, Black};
 
 mod load_pieces;
@@ -18,6 +17,7 @@ use load_frame::BoardFrame;
 use move_history::MoveHistory;
 use game_over::GameOverBanner;
 use start_menu::StartMenu;
+
 
 static mut SELECTED: Option<Position> = None;
 static mut HOVERED: Option<Position> = None;
@@ -105,6 +105,7 @@ pub async fn run_ui(mut game: Game) {
 
         board_frame.draw(tile_size);
         draw_board(&game, &light_tile, &dark_tile, &gate_textures.tex_vector, tile_size);
+        
         draw_pieces(&game, &piece_textures, &camera, tile_size);
         draw_selected(tile_size);
 
@@ -149,7 +150,7 @@ fn draw_board(game: &Game, light: &Texture2D, dark: &Texture2D, gates: &[Texture
         for col in 0..8 {
             let tex: &Texture2D = if game.board[row][col].gate.is_some() {
                 let frame = game.board[row][col].animation_frame.unwrap_or(0);
-                &gates[frame]
+                &gates[frame]  
             } else if (row + col) % 2 == 0 {
                 light
             } else {
