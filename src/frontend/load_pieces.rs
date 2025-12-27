@@ -4,6 +4,8 @@ use crate::pieces::piece_animations::loaders::bishop_loader;
 use crate::pieces::piece_animations::loaders::pawn_loader;
 use crate::pieces::piece_animations::loaders::knight_loader;
 use crate::pieces::piece_animations::loaders::rook_loader;
+use crate::pieces::piece_animations::loaders::queen_loader;
+use crate::pieces::piece_animations::loaders::king_loader;
 use std::collections::HashMap;
 
 /// Represents different animation states for pieces
@@ -81,6 +83,8 @@ impl PieceTextures {
         Self::load_pawn_animations(&mut animations).await;
         Self::load_knight_animations(&mut animations).await;
         Self::load_rook_animations(&mut animations).await;
+        Self::load_queen_animations(&mut animations).await;
+        Self::load_king_animations(&mut animations).await;
         
         // Add more animation loaders here as you implement them:
         // Self::load_knight_animations(&mut animations).await;
@@ -146,6 +150,32 @@ impl PieceTextures {
             animations.insert(
                 (PieceType::Rook, Color::White, AnimationState::Idle),
                 white_rook_idle
+            );
+        }
+    }
+
+    async fn load_queen_animations(
+        animations: &mut HashMap<(PieceType, Color, AnimationState), Vec<Texture2D>>
+    ) {
+        // White Queen Idle Animation
+        let white_queen_idle = queen_loader::load_queen_frames("white").await;
+        if !white_queen_idle.is_empty() {
+            animations.insert(
+                (PieceType::Queen, Color::White, AnimationState::Idle),
+                white_queen_idle
+            );
+        }
+    }
+
+    async fn load_king_animations(
+        animations: &mut HashMap<(PieceType, Color, AnimationState), Vec<Texture2D>>
+    ) {
+        // White King Idle Animation
+        let white_king_idle = king_loader::load_king_frames("white").await;
+        if !white_king_idle.is_empty() {
+            animations.insert(
+                (PieceType::King, Color::White, AnimationState::Idle),
+                white_king_idle
             );
         }
     }

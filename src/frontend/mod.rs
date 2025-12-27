@@ -92,7 +92,7 @@ pub async fn run_ui(mut game: Game) {
     let mut winner: Option<crate::pieces::Color> = None;
     
     // Initialize piece animation state
-    let mut piece_anim_state = PieceAnimationState::new(0.2); // 10 FPS animation
+    let mut piece_anim_state = PieceAnimationState::new(0.3); // 10 FPS animation
     
     loop {
         let now = get_time();
