@@ -126,6 +126,14 @@ impl PieceTextures {
                 white_pawn_idle
             );
         }
+
+        let black_pawn_idle = pawn_loader::load_pawn_frames("black").await;
+        if !black_pawn_idle.is_empty() {
+            animations.insert(
+                (PieceType::Pawn, Color::Black, AnimationState::Idle),
+                black_pawn_idle
+            );
+        }
     }
 
     async fn load_knight_animations(
