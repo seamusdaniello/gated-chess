@@ -105,6 +105,24 @@ impl PieceTextures {
             );
         }
 
+        // White Bishop Idle Animation
+        let white_bishop_idle = bishop_loader::load_bishop_frames("white").await;
+        if !white_bishop_idle.is_empty() {
+            animations.insert(
+                (PieceType::Bishop, Color::White, AnimationState::Idle),
+                white_bishop_idle
+            );
+        }
+
+        // Black Bishop Idle Animation
+        let black_bishop_idle = bishop_loader::load_bishop_frames("black").await;
+        if !black_bishop_idle.is_empty() {
+            animations.insert(
+                (PieceType::Bishop, Color::Black, AnimationState::Idle),
+                black_bishop_idle
+            );
+        }
+
         // Black Bishop Idle Animation
         // let black_bishop_idle = bishop_loader::load_bishop_frames("black").await;
         // if !black_bishop_idle.is_empty() {
