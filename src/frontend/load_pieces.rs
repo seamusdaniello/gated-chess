@@ -178,6 +178,15 @@ impl PieceTextures {
                 white_rook_idle
             );
         }
+
+        // Black Rook Idle Animation
+        let black_rook_idle = rook_loader::load_rook_frames("black").await;
+        if !black_rook_idle.is_empty() {
+            animations.insert(
+                (PieceType::Rook, Color::Black, AnimationState::Idle),
+                black_rook_idle
+            );
+        }
     }
 
     async fn load_queen_animations(
