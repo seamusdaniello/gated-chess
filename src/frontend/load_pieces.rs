@@ -209,6 +209,15 @@ impl PieceTextures {
                 white_queen_idle
             );
         }
+
+        // Black Queen Idle Animation
+        let black_queen_idle = queen_loader::load_queen_frames("black").await;
+        if !black_queen_idle.is_empty() {
+            animations.insert(
+                (PieceType::Queen, Color::Black, AnimationState::Idle),
+                black_queen_idle
+            );
+        }
     }
 
     async fn load_king_animations(
