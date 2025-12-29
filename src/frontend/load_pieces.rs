@@ -165,6 +165,15 @@ impl PieceTextures {
                 white_knight_idle
             );
         }
+
+        // Black Knight Idle Animation
+        let black_knight_idle = knight_loader::load_knight_frames("black").await;
+        if !black_knight_idle.is_empty() {
+            animations.insert(
+                (PieceType::Knight, Color::Black, AnimationState::Idle),
+                black_knight_idle
+            );
+        }
     }
 
     async fn load_rook_animations(
@@ -211,6 +220,15 @@ impl PieceTextures {
             animations.insert(
                 (PieceType::King, Color::White, AnimationState::Idle),
                 white_king_idle
+            );
+        }
+
+        // Black King Idle Animation
+        let black_king_idle = king_loader::load_king_frames("black").await;
+        if !black_king_idle.is_empty() {
+            animations.insert(
+                (PieceType::King, Color::Black, AnimationState::Idle),
+                black_king_idle
             );
         }
     }
