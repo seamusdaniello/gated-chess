@@ -159,6 +159,9 @@ pub async fn run_ui(mut game: Game) {
         draw_selected(tile_size);
 
         set_default_camera();
+        
+        // Draw row numbers after resetting camera (so they're not affected by board rotation)
+        draw_row_numbers(&game, tile_size);
 
         // Process clicks only if game is not over
         if !game_over {
@@ -249,14 +252,13 @@ fn draw_pieces(
     anim_state: &mut PieceAnimationState,
     current_time: f32,
 ) {
-
-    anim_state.update(current_time, 4);
-
     for row in 0..8 {
         for col in 0..8 {
             if let Some(piece) = game.board[row][col].piece {
                 // Try to get animation first, fall back to static texture
                 let tex = if let Some(frames) = textures.get_animation(piece.kind, piece.color, AnimationState::Idle) {
+                    // Update animation frame
+                    anim_state.update(current_time, frames.len());
                     // Get current frame
                     &frames[anim_state.current_frame]
                 } else {
@@ -328,18 +330,20 @@ fn process_click(game: &Game, camera: &Camera2D, current_tile_size: f32) -> Opti
 
 fn process_keyboard_input(game: &Game) -> Option<(Position, Position)> {
     unsafe {
+        // Check for Escape to cancel everything (like vim)
+        if is_key_pressed(KeyCode::Escape) {
+            SELECTED = None;
+            TYPING_MODE = false;
+            HIGHLIGHTED_COLUMN = None;
+            return None;
+        }
+        
         // Check for Enter key to enable typing mode
         if is_key_pressed(KeyCode::Enter) {
             if let Some(_) = SELECTED {
                 TYPING_MODE = true;
                 HIGHLIGHTED_COLUMN = None;
             }
-        }
-        
-        // Check for Escape to cancel typing mode
-        if is_key_pressed(KeyCode::Escape) {
-            TYPING_MODE = false;
-            HIGHLIGHTED_COLUMN = None;
         }
         
         // Check for column letter press (A-H)
@@ -409,6 +413,48 @@ fn draw_highlighted_column(current_tile_size: f32) {
                     current_tile_size,
                     current_tile_size,
                     Color::from_rgba(100, 150, 255, 60)
+                );
+            }
+        }
+    }
+}
+
+fn draw_row_numbers(game: &Game, current_tile_size: f32) {
+    unsafe {
+        let show_numbers = if let Some(_) = SELECTED {
+            true
+        } else {
+            TYPING_MODE
+        };
+        
+        if show_numbers {
+            let font_size = current_tile_size * 0.4;
+            let screen_width = screen_width();
+            let screen_height = screen_height();
+            let board_size = current_tile_size * 8.0;
+            
+            // Calculate board position on screen
+            let board_left = (screen_width - board_size) / 2.0;
+            let board_top = (screen_height - board_size) / 2.0;
+            
+            let offset_x = board_left - current_tile_size * 0.5; // Position to the left of the board
+            
+            for row in 0..8 {
+                // Flip row numbering based on current turn
+                let number = if game.current_turn == White {
+                    (8 - row).to_string() // White's perspective: 8 at top, 1 at bottom
+                } else {
+                    (row + 1).to_string() // Black's perspective: 1 at top, 8 at bottom
+                };
+                
+                let y_pos = board_top + (row as f32 * current_tile_size) + (current_tile_size * 0.5);
+                
+                draw_text(
+                    &number,
+                    offset_x,
+                    y_pos,
+                    font_size,
+                    WHITE
                 );
             }
         }
