@@ -4,7 +4,6 @@ use crate::game::{Game, Position};
 use crate::gates::update_gate_animation;
 use crate::gates::update_gates;
 use crate::pieces::Color::{White, Black};
-use crate::pieces::PieceType;
 
 mod load_pieces;
 mod load_gates;
@@ -22,6 +21,8 @@ use start_menu::StartMenu;
 
 static mut SELECTED: Option<Position> = None;
 static mut HOVERED: Option<Position> = None;
+static mut HIGHLIGHTED_COLUMN: Option<usize> = None;
+static mut TYPING_MODE: bool = false;
 
 // Add animation state tracking
 struct PieceAnimationState {
@@ -150,6 +151,9 @@ pub async fn run_ui(mut game: Game) {
         board_frame.draw(tile_size);
         draw_board(&game, &light_tile, &dark_tile, &gate_textures.tex_vector, tile_size);
         
+        // Draw highlighted column before pieces
+        draw_highlighted_column(tile_size);
+        
         // Update and draw pieces with animations
         draw_pieces(&game, &piece_textures, &camera, tile_size, &mut piece_anim_state, now as f32);
         draw_selected(tile_size);
@@ -158,6 +162,27 @@ pub async fn run_ui(mut game: Game) {
 
         // Process clicks only if game is not over
         if !game_over {
+            // Process keyboard input first
+            if let Some((from, to)) = process_keyboard_input(&game) {
+                if game.make_move(from, to).is_ok() {
+                    move_history.add_move(from, to);
+
+                    if game.is_checkmate(game.current_turn) {
+                        game_over = true;
+                        winner = Some(if game.current_turn == White { Black } else { White });
+                    } else if game.is_stalemate(game.current_turn) {
+                        game_over = true;
+                        winner = None;
+                    }
+                }
+                unsafe { 
+                    SELECTED = None;
+                    HIGHLIGHTED_COLUMN = None;
+                    TYPING_MODE = false;
+                }
+            }
+            
+            // Then process mouse clicks
             if let Some((from, to)) = process_click(&game, &camera, tile_size) {
                 if game.make_move(from, to).is_ok() {
                     move_history.add_move(from, to);
@@ -300,15 +325,111 @@ fn process_click(game: &Game, camera: &Camera2D, current_tile_size: f32) -> Opti
     None
 }
 
+fn process_keyboard_input(game: &Game) -> Option<(Position, Position)> {
+    unsafe {
+        // Check for Enter key to enable typing mode
+        if is_key_pressed(KeyCode::Enter) {
+            if let Some(_) = SELECTED {
+                TYPING_MODE = true;
+                HIGHLIGHTED_COLUMN = None;
+            }
+        }
+        
+        // Check for Escape to cancel typing mode
+        if is_key_pressed(KeyCode::Escape) {
+            TYPING_MODE = false;
+            HIGHLIGHTED_COLUMN = None;
+        }
+        
+        // Check for column letter press (A-H)
+        if let Some(col) = process_chess_column() {
+            HIGHLIGHTED_COLUMN = Some(col);
+        }
+        
+        // Check for row number press (1-8)
+        if let Some(row) = process_chess_row() {
+            if let Some(col) = HIGHLIGHTED_COLUMN {
+                let pos = Position { row, col };
+                
+                if let Some(from) = SELECTED {
+                    if TYPING_MODE {
+                        // In typing mode, this is the destination
+                        HIGHLIGHTED_COLUMN = None;
+                        TYPING_MODE = false;
+                        return Some((from, pos));
+                    } else {
+                        // Not in typing mode, select this position
+                        SELECTED = Some(pos);
+                        HIGHLIGHTED_COLUMN = None;
+                    }
+                } else {
+                    // No piece selected yet, select this position
+                    SELECTED = Some(pos);
+                    HIGHLIGHTED_COLUMN = None;
+                }
+            }
+        }
+        
+        None
+    }
+}
+
+fn process_chess_column() -> Option<usize> {
+    if is_key_pressed(KeyCode::A) { return Some(0); }
+    if is_key_pressed(KeyCode::B) { return Some(1); }
+    if is_key_pressed(KeyCode::C) { return Some(2); }
+    if is_key_pressed(KeyCode::D) { return Some(3); }
+    if is_key_pressed(KeyCode::E) { return Some(4); }
+    if is_key_pressed(KeyCode::F) { return Some(5); }
+    if is_key_pressed(KeyCode::G) { return Some(6); }
+    if is_key_pressed(KeyCode::H) { return Some(7); }
+    None
+}
+
+fn process_chess_row() -> Option<usize> {
+    if is_key_pressed(KeyCode::Key1) { return Some(0); } // Row 1 = index 0 (top)
+    if is_key_pressed(KeyCode::Key2) { return Some(1); }
+    if is_key_pressed(KeyCode::Key3) { return Some(2); }
+    if is_key_pressed(KeyCode::Key4) { return Some(3); }
+    if is_key_pressed(KeyCode::Key5) { return Some(4); }
+    if is_key_pressed(KeyCode::Key6) { return Some(5); }
+    if is_key_pressed(KeyCode::Key7) { return Some(6); }
+    if is_key_pressed(KeyCode::Key8) { return Some(7); } // Row 8 = index 7 (bottom)
+    None
+}
+
+fn draw_highlighted_column(current_tile_size: f32) {
+    unsafe {
+        if let Some(col) = HIGHLIGHTED_COLUMN {
+            for row in 0..8 {
+                draw_rectangle(
+                    col as f32 * current_tile_size,
+                    row as f32 * current_tile_size,
+                    current_tile_size,
+                    current_tile_size,
+                    Color::from_rgba(100, 150, 255, 60)
+                );
+            }
+        }
+    }
+}
+
 fn draw_selected(current_tile_size: f32) {
     unsafe {
         if let Some(pos) = SELECTED {
+            // Use different color based on typing mode
+            let color = if TYPING_MODE {
+                Color::from_rgba(0, 255, 0, 100)  // Green in typing mode
+            } else {
+                Color::from_rgba(255, 255, 0, 80)  // Yellow normally
+            };
+            
             draw_rectangle(
                 pos.col as f32 * current_tile_size,
                 pos.row as f32 * current_tile_size,
                 current_tile_size,
                 current_tile_size,
-                Color::from_rgba(255, 255, 0, 80)
+                color
             );
         }
     }
