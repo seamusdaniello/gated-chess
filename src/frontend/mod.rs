@@ -249,13 +249,14 @@ fn draw_pieces(
     anim_state: &mut PieceAnimationState,
     current_time: f32,
 ) {
+
+    anim_state.update(current_time, 4);
+
     for row in 0..8 {
         for col in 0..8 {
             if let Some(piece) = game.board[row][col].piece {
                 // Try to get animation first, fall back to static texture
                 let tex = if let Some(frames) = textures.get_animation(piece.kind, piece.color, AnimationState::Idle) {
-                    // Update animation frame
-                    anim_state.update(current_time, frames.len());
                     // Get current frame
                     &frames[anim_state.current_frame]
                 } else {
