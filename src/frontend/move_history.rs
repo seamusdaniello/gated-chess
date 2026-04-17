@@ -33,8 +33,8 @@ impl MoveHistory {
         }
     }
 
-    pub fn draw(&self, tile_size: f32) {
-        let panel_y = 20.0;
+    pub fn draw(&self, _tile_size: f32) {
+        let _panel_y = 20.0;
         let panel_width = 250.0;
         let panel_height = screen_height() - 40.0;
         let panel_x = screen_width() - panel_width - 20.0;

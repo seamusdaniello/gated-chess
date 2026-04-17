@@ -12,7 +12,6 @@ mod pieces;
 mod gates;
 mod game;
 mod config;
-mod parser;
 mod frontend; // <-- your GUI code lives in src/frontend/mod.rs
 
 use crate::board::create_board;

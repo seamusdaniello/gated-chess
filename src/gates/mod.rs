@@ -10,7 +10,6 @@
 
 pub mod gate_type;
 pub mod logic;
-pub mod actions;
 
 pub use gate_type::GateType;
 pub use logic::{update_gates, update_gate_animation};

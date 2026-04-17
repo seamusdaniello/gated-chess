@@ -11,5 +11,4 @@
 #[derive(Copy, Clone, Debug)]
 pub enum GateType {
     Standard { duration: u8 },
-    Decay { duration: u8 },
 }

@@ -18,14 +18,6 @@ pub enum AnimationState {
 }
 
 impl AnimationState {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            AnimationState::Idle => "idle",
-            AnimationState::Moving => "moving",
-            AnimationState::Capturing => "capturing",
-            AnimationState::Selected => "selected",
-        }
-    }
 }
 
 impl From<&str> for AnimationState {
@@ -105,15 +97,6 @@ impl PieceTextures {
             );
         }
 
-        // White Bishop Idle Animation
-        let white_bishop_idle = bishop_loader::load_bishop_frames("white").await;
-        if !white_bishop_idle.is_empty() {
-            animations.insert(
-                (PieceType::Bishop, Color::White, AnimationState::Idle),
-                white_bishop_idle
-            );
-        }
-
         // Black Bishop Idle Animation
         let black_bishop_idle = bishop_loader::load_bishop_frames("black").await;
         if !black_bishop_idle.is_empty() {
@@ -122,15 +105,6 @@ impl PieceTextures {
                 black_bishop_idle
             );
         }
-
-        // Black Bishop Idle Animation
-        // let black_bishop_idle = bishop_loader::load_bishop_frames("black").await;
-        // if !black_bishop_idle.is_empty() {
-        //     animations.insert(
-        //         (PieceType::Bishop, Color::Black, AnimationState::Idle),
-        //         black_bishop_idle
-        //     );
-        // }
     }
 
     async fn load_pawn_animations(
@@ -255,106 +229,5 @@ impl PieceTextures {
         state: AnimationState
     ) -> Option<&Vec<Texture2D>> {
         self.animations.get(&(kind, color, state))
-    }
-
-    /// Get animation frames by string (for backward compatibility)
-    pub fn get_animation_by_str(
-        &self,
-        kind: PieceType,
-        color: Color,
-        state: &str
-    ) -> Option<&Vec<Texture2D>> {
-        self.get_animation(kind, color, AnimationState::from(state))
-    }
-
-    /// Check if an animation exists for a piece
-    pub fn has_animation(
-        &self,
-        kind: PieceType,
-        color: Color,
-        state: AnimationState
-    ) -> bool {
-        self.animations.contains_key(&(kind, color, state))
-    }
-
-    /// Get the number of frames in an animation
-    pub fn animation_frame_count(
-        &self,
-        kind: PieceType,
-        color: Color,
-        state: AnimationState
-    ) -> usize {
-        self.animations
-            .get(&(kind, color, state))
-            .map_or(0, |frames| frames.len())
-    }
-}
-
-/// Helper struct for managing piece animations during gameplay
-pub struct PieceAnimator {
-    current_frame: usize,
-    frame_timer: f32,
-    frame_duration: f32,
-    looping: bool,
-    finished: bool,
-}
-
-impl PieceAnimator {
-    pub fn new(frame_duration: f32, looping: bool) -> Self {
-        Self {
-            current_frame: 0,
-            frame_timer: 0.0,
-            frame_duration,
-            looping,
-            finished: false,
-        }
-    }
-
-    pub fn update(&mut self, delta_time: f32, frame_count: usize) {
-        if self.finished && !self.looping {
-            return;
-        }
-
-        self.frame_timer += delta_time;
-
-        if self.frame_timer >= self.frame_duration {
-            self.frame_timer -= self.frame_duration;
-            self.current_frame += 1;
-
-            if self.current_frame >= frame_count {
-                if self.looping {
-                    self.current_frame = 0;
-                } else {
-                    self.current_frame = frame_count.saturating_sub(1);
-                    self.finished = true;
-                }
-            }
-        }
-    }
-
-    pub fn current_frame(&self) -> usize {
-        self.current_frame
-    }
-
-    pub fn is_finished(&self) -> bool {
-        self.finished
-    }
-
-    pub fn reset(&mut self) {
-        self.current_frame = 0;
-        self.frame_timer = 0.0;
-        self.finished = false;
-    }
-
-    pub fn get_texture<'a>(
-        &self,
-        textures: &'a PieceTextures,
-        kind: PieceType,
-        color: Color,
-        state: AnimationState
-    ) -> Option<&'a Texture2D> {
-        textures
-            .get_animation(kind, color, state)
-            .and_then(|frames| frames.get(self.current_frame))
     }
 }

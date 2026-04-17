@@ -295,7 +295,7 @@ fn draw_pieces(
     }
 }
 
-fn process_click(game: &Game, camera: &Camera2D, current_tile_size: f32) -> Option<(Position, Position)> {
+fn process_click(_game: &Game, camera: &Camera2D, current_tile_size: f32) -> Option<(Position, Position)> {
     if is_mouse_button_pressed(MouseButton::Left) {
         // Convert screen position → world position using the SAME camera
         let world = camera.screen_to_world(mouse_position().into());
@@ -328,7 +328,7 @@ fn process_click(game: &Game, camera: &Camera2D, current_tile_size: f32) -> Opti
     None
 }
 
-fn process_keyboard_input(game: &Game) -> Option<(Position, Position)> {
+fn process_keyboard_input(_game: &Game) -> Option<(Position, Position)> {
     unsafe {
         // Check for Escape to cancel everything (like vim)
         if is_key_pressed(KeyCode::Escape) {

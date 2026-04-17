@@ -26,20 +26,11 @@ pub struct Position {
 }
 
 impl Position {
-    pub fn new(row: usize, col: usize) -> Option<Position> {
-        if row < BOARD_SIZE && col < BOARD_SIZE {
-            Some(Position { row, col })
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MoveError {
     IllegalMove,
-    NoPieceAtPosition,
-    InvalidPosition,
     MustGetOutOfCheck,
     GameNotInProgress,
 }

@@ -1,8 +1,6 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 use crate::board::{Square};
-use crate::config::BOARD_SIZE;
-use crate::pieces::{Color, Piece, PieceId, PieceType};
+use crate::pieces::{Piece, PieceId};
 use crate::pieces::piece_fsm::*;
 use crate::pieces::piece_fsm::PieceFSM;
 use crate::game::Position;
@@ -35,12 +33,12 @@ impl<'a> GameStateManager {
 
     fn register_piece(&mut self, piece: crate::pieces::Piece, pos: Position) {
         let fsm: Box<dyn PieceFSM> = match piece.kind {
-            crate::pieces::PieceType::Pawn => Box::new(PawnFSM::new(piece, pos)),
-            crate::pieces::PieceType::Rook => Box::new(RookFSM::new(piece, pos)),
-            crate::pieces::PieceType::Knight => Box::new(KnightFSM::new(piece, pos)),
-            crate::pieces::PieceType::Bishop => Box::new(BishopFSM::new(piece, pos)),
-            crate::pieces::PieceType::Queen => Box::new(QueenFSM::new(piece, pos)),
-            crate::pieces::PieceType::King => Box::new(KingFSM::new(piece, pos)),
+            crate::pieces::PieceType::Pawn => Box::new(PawnFSM::new(piece)),
+            crate::pieces::PieceType::Rook => Box::new(RookFSM::new(piece)),
+            crate::pieces::PieceType::Knight => Box::new(KnightFSM::new(piece)),
+            crate::pieces::PieceType::Bishop => Box::new(BishopFSM::new(piece)),
+            crate::pieces::PieceType::Queen => Box::new(QueenFSM::new(piece)),
+            crate::pieces::PieceType::King => Box::new(KingFSM::new(piece)),
         };
 
         self.piece_fsms.insert(piece.id, fsm);

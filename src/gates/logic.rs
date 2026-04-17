@@ -27,16 +27,6 @@ pub fn update_gates(game:&mut Game) {
                             }
                         }
                     }
-                    GateType::Decay { duration } => {
-                        if duration > 0 {
-                            let new_duration = duration - 1;
-                            if new_duration == 0 {
-                                square.gate = None;
-                            } else {
-                                square.gate = Some(GateType::Decay { duration: new_duration });
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -64,4 +54,3 @@ pub fn update_gate_animation(game: &mut Game) {
         }
     }
 }
-
