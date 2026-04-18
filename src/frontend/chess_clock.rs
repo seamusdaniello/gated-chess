@@ -72,33 +72,38 @@ impl ChessClock {
         self.last_tick_at = now;
     }
 
-    pub fn draw(&self, active_color: PieceColor) {
-        let panel_x = 20.0;
-        let panel_width = 190.0;
-        let panel_height = 110.0;
-        let top_y = 120.0;
-        let bottom_y = screen_height() - panel_height - 120.0;
+    pub fn draw(&self, active_color: PieceColor, tile_size: f32) {
+        let board_size = tile_size * 8.0;
+        let board_left = (screen_width() - board_size) / 2.0;
+        let board_bottom = (screen_height() + board_size) / 2.0;
 
-        draw_text("Clock", panel_x + 18.0, top_y - 50.0, 24.0, LIGHTGRAY);
-        draw_text(&self.label, panel_x + 18.0, top_y - 20.0, 30.0, GOLD);
+        let panel_width = tile_size * 1.8;
+        let panel_height = tile_size * 0.62;
+        let gap = tile_size * 0.12;
+
+        let panel_y = board_bottom + gap;
+
+        draw_text(&self.label, board_left, panel_y - gap * 0.4, tile_size * 0.22, GOLD);
 
         self.draw_clock_panel(
-            panel_x,
-            top_y,
+            board_left,
+            panel_y,
             panel_width,
             panel_height,
             "White",
             self.white_remaining,
             active_color == PieceColor::White,
+            tile_size,
         );
         self.draw_clock_panel(
-            panel_x,
-            bottom_y,
+            board_left + panel_width + gap,
+            panel_y,
             panel_width,
             panel_height,
             "Black",
             self.black_remaining,
             active_color == PieceColor::Black,
+            tile_size,
         );
     }
 
@@ -111,6 +116,7 @@ impl ChessClock {
         label: &str,
         remaining: f64,
         active: bool,
+        tile_size: f32,
     ) {
         draw_rectangle(
             x,
@@ -123,9 +129,9 @@ impl ChessClock {
                 Color::from_rgba(32, 32, 40, 230)
             },
         );
-        draw_rectangle_lines(x, y, width, height, 3.0, if active { GOLD } else { WHITE });
-        draw_text(label, x + 16.0, y + 30.0, 28.0, LIGHTGRAY);
-        draw_text(&format_time(remaining), x + 16.0, y + 80.0, 42.0, WHITE);
+        draw_rectangle_lines(x, y, width, height, 2.0, if active { GOLD } else { WHITE });
+        draw_text(label, x + tile_size * 0.1, y + tile_size * 0.24, tile_size * 0.2, LIGHTGRAY);
+        draw_text(&format_time(remaining), x + tile_size * 0.1, y + tile_size * 0.55, tile_size * 0.3, WHITE);
     }
 }
 

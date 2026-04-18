@@ -339,7 +339,8 @@ pub async fn run_ui() {
             }
         }
 
-        let tile_size = f32::min(screen_width(), screen_height()) / 8.0;
+        // Reserve ~20% of screen height below the board for UI (clocks, etc.)
+        let tile_size = f32::min(screen_width(), screen_height() * 0.80) / 8.0;
         let board_center = vec2(4.0 * tile_size, 4.0 * tile_size);
 
         let mut camera = Camera2D {
@@ -414,7 +415,7 @@ pub async fn run_ui() {
 
         // Draw row numbers after resetting camera (so they're not affected by board rotation)
         draw_row_numbers(board_perspective, tile_size);
-        clock.draw(game.current_turn);
+        clock.draw(game.current_turn, tile_size);
 
         // Process clicks only if game is not over and the gear panel didn't consume the click
         let local_turn = can_interact(&session, connection_ready, game.current_turn);

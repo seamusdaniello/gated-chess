@@ -46,17 +46,17 @@ impl MoveHistory {
         }
     }
 
-    pub fn draw(&mut self, _tile_size: f32, current_time: f64) {
+    pub fn draw(&mut self, tile_size: f32, current_time: f64) {
         self.update_animation();
 
-        let panel_width = 250.0;
+        let panel_width = tile_size * 3.2;
         let panel_height = screen_height() - 40.0;
-        let collapsed_width = 38.0;
+        let collapsed_width = tile_size * 0.5;
         let panel_width_current =
             collapsed_width + ((panel_width - collapsed_width) * self.open_progress);
         let panel_x = screen_width() - panel_width_current - 20.0;
         let panel_y = 20.0;
-        let button_size = 26.0;
+        let button_size = tile_size * 0.33;
         let collapse_x = panel_x + panel_width_current - (button_size * 2.0) - 18.0;
         let close_x = panel_x + panel_width_current - button_size - 10.0;
         let button_y = panel_y + 8.0;
@@ -77,17 +77,21 @@ impl MoveHistory {
             WHITE,
         );
 
+        let header_font = tile_size * 0.28;
+        let content_font = tile_size * 0.24;
+        let header_y = panel_y + tile_size * 0.38;
+        let start_y = panel_y + tile_size * 0.62;
+        let line_height = tile_size * 0.32;
+
         if self.open_progress > 0.15 {
-            draw_text("Move History", panel_x + 10.0, panel_y + 30.0, 24.0, WHITE);
+            draw_text("Move History", panel_x + 10.0, header_y, header_font, WHITE);
             self.draw_button(collapse_x, button_y, button_size, "<");
             self.draw_button(close_x, button_y, button_size, "X");
         } else {
-            draw_text("<", panel_x + 10.0, panel_y + 30.0, 28.0, WHITE);
+            draw_text("<", panel_x + 10.0, header_y, header_font * 1.1, WHITE);
         }
 
-        let start_y = panel_y + 50.0;
-        let line_height = 25.0;
-        let max_visible = ((panel_height - 60.0) / line_height).floor() as usize;
+        let max_visible = ((panel_height - tile_size * 0.75) / line_height).floor() as usize;
         let start_idx = if self.moves.len() > max_visible {
             self.moves.len() - max_visible
         } else {
@@ -101,7 +105,7 @@ impl MoveHistory {
                     typed_char_count(&move_text, current_time - entry.added_at, 28.0);
                 let typed_text: String = move_text.chars().take(visible_chars).collect();
                 let y_pos = start_y + ((i - start_idx) as f32 * line_height);
-                draw_text(&typed_text, panel_x + 15.0, y_pos, 20.0, WHITE);
+                draw_text(&typed_text, panel_x + 15.0, y_pos, content_font, WHITE);
             }
         }
 
@@ -146,7 +150,7 @@ impl MoveHistory {
             },
         );
         draw_rectangle_lines(x, y, size, size, 2.0, WHITE);
-        draw_text(label, x + 7.0, y + 19.0, 20.0, WHITE);
+        draw_text(label, x + size * 0.22, y + size * 0.72, size * 0.65, WHITE);
     }
 }
 
