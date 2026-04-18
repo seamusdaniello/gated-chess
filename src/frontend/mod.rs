@@ -1,12 +1,15 @@
 use crate::frontend::load_pieces::AnimationState;
+use crate::game::moves::generation::get_piece_moves;
 use crate::game::{Game, Position};
 use crate::gates::update_gate_animation;
 use crate::gates::update_gates;
 use crate::network::{NetworkCommand, NetworkEvent, OnlineSession, SessionConfig, SessionRole};
 use crate::pieces::Color as PieceColor;
 use crate::pieces::Color::{Black, White};
+use crate::time_control::TimeControl;
 use macroquad::prelude::*;
 
+mod chess_clock;
 mod game_over;
 mod load_frame;
 mod load_gates;
@@ -15,18 +18,25 @@ mod move_history;
 mod session_banner;
 mod start_menu;
 
+use chess_clock::ChessClock;
 use game_over::GameOverBanner;
 use load_frame::BoardFrame;
 use load_gates::GateTextures;
 use load_pieces::PieceTextures;
 use move_history::MoveHistory;
 use session_banner::draw_status;
-use start_menu::StartMenu;
+use start_menu::{LaunchConfig, StartMenu};
 
 static mut SELECTED: Option<Position> = None;
 static mut HOVERED: Option<Position> = None;
 static mut HIGHLIGHTED_COLUMN: Option<usize> = None;
 static mut TYPING_MODE: bool = false;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct AutoMove {
+    from: Position,
+    to: Position,
+}
 
 // Add animation state tracking
 struct PieceAnimationState {
@@ -72,13 +82,16 @@ impl PieceAnimationState {
 pub async fn run_ui(mut game: Game) {
     let mut in_menu = true;
     let mut start_menu = StartMenu::new();
-    let mut session_config = SessionConfig::Local;
+    let mut launch_config = LaunchConfig {
+        session: SessionConfig::Local,
+        time_control: TimeControl::new(180, 2),
+    };
 
     while in_menu {
         clear_background(BLACK);
 
         if let Some(config) = start_menu.draw() {
-            session_config = config;
+            launch_config = config;
             in_menu = false;
         }
 
@@ -95,20 +108,30 @@ pub async fn run_ui(mut game: Game) {
 
     let mut last_update = 0.0;
     let mut move_history = MoveHistory::new();
-    let session = match &session_config {
+    let session = match &launch_config.session {
         SessionConfig::Local => None,
-        SessionConfig::Host { bind_addr } => Some(OnlineSession::host(bind_addr.clone())),
+        SessionConfig::Host { bind_addr } => Some(OnlineSession::host(
+            bind_addr.clone(),
+            launch_config.time_control,
+        )),
         SessionConfig::Join { server_addr } => Some(OnlineSession::join(server_addr.clone())),
     };
-    let mut status_message = match &session_config {
+    let mut clock = ChessClock::new(launch_config.time_control, get_time());
+    let mut status_message = match &launch_config.session {
         SessionConfig::Local => None,
         SessionConfig::Host { bind_addr } => Some(format!("Hosting on {}", bind_addr)),
         SessionConfig::Join { server_addr } => Some(format!("Connecting to {}", server_addr)),
     };
-    let mut connection_ready = matches!(session_config, SessionConfig::Local);
+    let mut status_visible = status_message.is_some();
+    let mut status_expire_turn: Option<u32> = status_message.as_ref().map(|_| 1);
+    let mut status_started_at = status_message.as_ref().map(|_| get_time());
+    let mut connection_ready = matches!(launch_config.session, SessionConfig::Local);
 
     let mut game_over = false;
+    let mut game_over_banner_visible = true;
     let mut winner: Option<crate::pieces::Color> = None;
+    let mut turn_count: u32 = 0;
+    let mut queued_auto_move: Option<AutoMove> = None;
 
     // Initialize piece animation state
     let mut piece_anim_state = PieceAnimationState::new(0.3); // 10 FPS animation
@@ -120,7 +143,14 @@ pub async fn run_ui(mut game: Game) {
         while let Some(event) = session.as_ref().and_then(|online| online.try_recv()) {
             match event {
                 NetworkEvent::WaitingForOpponent(addr) => {
-                    status_message = Some(format!("Waiting for opponent on {}", addr));
+                    set_status_message(
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        &format!("Waiting for opponent on {}", addr),
+                        turn_count,
+                    );
                     connection_ready = false;
                 }
                 NetworkEvent::Connected(addr) => {
@@ -129,12 +159,31 @@ pub async fn run_ui(mut game: Game) {
                         .map(|online| online.role())
                         .unwrap_or(SessionRole::Local);
 
-                    status_message = Some(match role {
+                    let message = match role {
                         SessionRole::Host => format!("Opponent connected from {}", addr),
                         SessionRole::Client => format!("Connected to {}", addr),
                         SessionRole::Local => addr,
-                    });
+                    };
+                    set_status_message(
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        &message,
+                        turn_count,
+                    );
                     connection_ready = true;
+                }
+                NetworkEvent::TimeControlUpdated(time_control) => {
+                    clock.reconfigure(time_control, now);
+                    set_status_message(
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        &format!("Time control synced: {}", time_control.label()),
+                        turn_count,
+                    );
                 }
                 NetworkEvent::RemoteMove(from, to) => {
                     let is_host = session
@@ -143,29 +192,65 @@ pub async fn run_ui(mut game: Game) {
                         .unwrap_or(false);
 
                     if is_host {
+                        let mover = game.current_turn;
                         if game.make_move(from, to).is_ok() {
                             move_history.add_move(from, to);
-                            status_message = Some("Opponent move applied".to_string());
+                            clock.apply_increment(mover, now);
+                            set_status_message(
+                                &mut status_message,
+                                &mut status_visible,
+                                &mut status_expire_turn,
+                                &mut status_started_at,
+                                "Opponent move applied",
+                                turn_count,
+                            );
 
                             if let Some(online) = &session {
                                 online.send(NetworkCommand::BroadcastMove(from, to));
                             }
 
                             update_game_over_state(&game, &mut game_over, &mut winner);
+                            game_over_banner_visible = true;
                         } else if let Some(online) = &session {
                             online.send(NetworkCommand::RejectMove("Illegal move".to_string()));
                         }
-                    } else if game.make_move(from, to).is_ok() {
-                        move_history.add_move(from, to);
-                        status_message = Some("Move synced".to_string());
-                        update_game_over_state(&game, &mut game_over, &mut winner);
+                    } else {
+                        let mover = game.current_turn;
+                        if game.make_move(from, to).is_ok() {
+                            move_history.add_move(from, to);
+                            clock.apply_increment(mover, now);
+                            set_status_message(
+                                &mut status_message,
+                                &mut status_visible,
+                                &mut status_expire_turn,
+                                &mut status_started_at,
+                                "Move synced",
+                                turn_count,
+                            );
+                            update_game_over_state(&game, &mut game_over, &mut winner);
+                            game_over_banner_visible = true;
+                        }
                     }
                 }
                 NetworkEvent::InvalidMove(reason) => {
-                    status_message = Some(format!("Move rejected: {}", reason));
+                    set_status_message(
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        &format!("Move rejected: {}", reason),
+                        turn_count,
+                    );
                 }
                 NetworkEvent::Disconnected(reason) | NetworkEvent::Error(reason) => {
-                    status_message = Some(reason);
+                    set_status_message(
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        &reason,
+                        turn_count,
+                    );
                     connection_ready = false;
                 }
             }
@@ -173,10 +258,38 @@ pub async fn run_ui(mut game: Game) {
 
         clear_background(BLACK);
 
+        if let Some(timeout_winner) =
+            clock.update(game.current_turn, now, !game_over && connection_ready)
+        {
+            game_over = true;
+            game_over_banner_visible = true;
+            winner = Some(timeout_winner);
+            set_status_message(
+                &mut status_message,
+                &mut status_visible,
+                &mut status_expire_turn,
+                &mut status_started_at,
+                &format!(
+                    "{} wins on time",
+                    if timeout_winner == White {
+                        "White"
+                    } else {
+                        "Black"
+                    }
+                ),
+                turn_count,
+            );
+        }
+
         if !game_over {
             if game.current_turn != last_turn {
+                turn_count += 1;
                 update_gates(&mut game);
                 last_turn = game.current_turn;
+
+                if matches!(status_expire_turn, Some(expire_at) if turn_count >= expire_at) {
+                    status_visible = false;
+                }
             }
 
             if now - last_update >= 0.5 {
@@ -232,6 +345,7 @@ pub async fn run_ui(mut game: Game) {
 
         // Draw highlighted column before pieces
         draw_highlighted_column(tile_size);
+        draw_queued_move(tile_size, queued_auto_move);
 
         // Update and draw pieces with animations
         draw_pieces(
@@ -249,23 +363,83 @@ pub async fn run_ui(mut game: Game) {
 
         // Draw row numbers after resetting camera (so they're not affected by board rotation)
         draw_row_numbers(board_perspective, tile_size);
+        clock.draw(game.current_turn);
 
         // Process clicks only if game is not over
         let local_turn = can_interact(&session, connection_ready, game.current_turn);
+        let can_queue_auto_move =
+            can_queue_auto_move(&session, connection_ready, game.current_turn);
 
         if !game_over && local_turn {
+            if let Some(auto_move) = queued_auto_move {
+                let local_color = local_player_color(&session, game.current_turn);
+
+                if is_move_legal_for_color(&game, auto_move.from, auto_move.to, local_color) {
+                    try_local_move(
+                        &mut game,
+                        &mut move_history,
+                        &mut clock,
+                        &session,
+                        &mut game_over,
+                        &mut game_over_banner_visible,
+                        &mut winner,
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        turn_count,
+                        auto_move.from,
+                        auto_move.to,
+                    );
+                    queued_auto_move = None;
+                } else {
+                    queued_auto_move = None;
+                    set_status_message(
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        "Queued move is no longer legal",
+                        turn_count,
+                    );
+                }
+            }
+        }
+
+        if !game_over && (local_turn || can_queue_auto_move) {
             // Process keyboard input first
             if let Some((from, to)) = process_keyboard_input(&game) {
-                try_local_move(
-                    &mut game,
-                    &mut move_history,
-                    &session,
-                    &mut game_over,
-                    &mut winner,
-                    &mut status_message,
-                    from,
-                    to,
-                );
+                if local_turn {
+                    try_local_move(
+                        &mut game,
+                        &mut move_history,
+                        &mut clock,
+                        &session,
+                        &mut game_over,
+                        &mut game_over_banner_visible,
+                        &mut winner,
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        turn_count,
+                        from,
+                        to,
+                    );
+                } else {
+                    update_auto_move(
+                        &game,
+                        &session,
+                        &mut queued_auto_move,
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        turn_count,
+                        from,
+                        to,
+                    );
+                }
                 unsafe {
                     SELECTED = None;
                     HIGHLIGHTED_COLUMN = None;
@@ -275,16 +449,37 @@ pub async fn run_ui(mut game: Game) {
 
             // Then process mouse clicks
             if let Some((from, to)) = process_click(&game, &camera, tile_size) {
-                try_local_move(
-                    &mut game,
-                    &mut move_history,
-                    &session,
-                    &mut game_over,
-                    &mut winner,
-                    &mut status_message,
-                    from,
-                    to,
-                );
+                if local_turn {
+                    try_local_move(
+                        &mut game,
+                        &mut move_history,
+                        &mut clock,
+                        &session,
+                        &mut game_over,
+                        &mut game_over_banner_visible,
+                        &mut winner,
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        turn_count,
+                        from,
+                        to,
+                    );
+                } else {
+                    update_auto_move(
+                        &game,
+                        &session,
+                        &mut queued_auto_move,
+                        &mut status_message,
+                        &mut status_visible,
+                        &mut status_expire_turn,
+                        &mut status_started_at,
+                        turn_count,
+                        from,
+                        to,
+                    );
+                }
                 unsafe {
                     SELECTED = None;
                 }
@@ -292,24 +487,33 @@ pub async fn run_ui(mut game: Game) {
         }
 
         // Draw move history panel
-        move_history.draw(tile_size);
+        move_history.draw(tile_size, now);
 
         // Draw game over banner if game ended
-        if game_over {
-            GameOverBanner::draw(winner);
+        if game_over && game_over_banner_visible {
+            if GameOverBanner::draw(winner) {
+                game_over_banner_visible = false;
+            }
 
             if is_key_pressed(KeyCode::Escape) {
                 break;
             }
         }
 
-        if let Some(message) = &status_message {
-            let title = if connection_ready {
-                "Online Play"
-            } else {
-                "Connection"
-            };
-            draw_status(title, message);
+        if status_visible {
+            if let Some(message) = &status_message {
+                let title = if connection_ready {
+                    "Online Play"
+                } else {
+                    "Connection"
+                };
+                let started_at = status_started_at.unwrap_or(now);
+                let visible_chars =
+                    (((now - started_at) * 36.0).floor() as usize).min(message.chars().count());
+                if draw_status(title, message, visible_chars) {
+                    status_visible = false;
+                }
+            }
         }
 
         next_frame().await;
@@ -568,6 +772,25 @@ fn draw_highlighted_column(current_tile_size: f32) {
     }
 }
 
+fn draw_queued_move(current_tile_size: f32, queued_auto_move: Option<AutoMove>) {
+    if let Some(auto_move) = queued_auto_move {
+        draw_rectangle(
+            auto_move.from.col as f32 * current_tile_size,
+            auto_move.from.row as f32 * current_tile_size,
+            current_tile_size,
+            current_tile_size,
+            Color::from_rgba(70, 180, 255, 90),
+        );
+        draw_rectangle(
+            auto_move.to.col as f32 * current_tile_size,
+            auto_move.to.row as f32 * current_tile_size,
+            current_tile_size,
+            current_tile_size,
+            Color::from_rgba(70, 255, 180, 90),
+        );
+    }
+}
+
 fn draw_row_numbers(perspective: PieceColor, current_tile_size: f32) {
     unsafe {
         let show_numbers = if let Some(_) = SELECTED {
@@ -612,6 +835,13 @@ fn board_perspective(session: &Option<OnlineSession>, current_turn: PieceColor) 
         .unwrap_or(current_turn)
 }
 
+fn local_player_color(session: &Option<OnlineSession>, fallback: PieceColor) -> PieceColor {
+    session
+        .as_ref()
+        .map(|online| online.local_color())
+        .unwrap_or(fallback)
+}
+
 fn can_interact(
     session: &Option<OnlineSession>,
     connection_ready: bool,
@@ -620,6 +850,31 @@ fn can_interact(
     match session {
         Some(online) => connection_ready && online.local_color() == current_turn,
         None => true,
+    }
+}
+
+fn can_queue_auto_move(
+    session: &Option<OnlineSession>,
+    connection_ready: bool,
+    current_turn: PieceColor,
+) -> bool {
+    match session {
+        Some(online) => connection_ready && online.local_color() != current_turn,
+        None => false,
+    }
+}
+
+fn is_move_legal_for_color(game: &Game, from: Position, to: Position, color: PieceColor) -> bool {
+    if let Some(piece) = game.board[from.row][from.col].piece {
+        if piece.color != color {
+            return false;
+        }
+
+        let mut moves = get_piece_moves(game, from, color);
+        moves.retain(|&candidate| !game.leaves_king_in_check(from, candidate, color));
+        moves.contains(&to)
+    } else {
+        false
     }
 }
 
@@ -637,13 +892,73 @@ fn update_game_over_state(game: &Game, game_over: &mut bool, winner: &mut Option
     }
 }
 
+fn update_auto_move(
+    game: &Game,
+    session: &Option<OnlineSession>,
+    queued_auto_move: &mut Option<AutoMove>,
+    status_message: &mut Option<String>,
+    status_visible: &mut bool,
+    status_expire_turn: &mut Option<u32>,
+    status_started_at: &mut Option<f64>,
+    turn_count: u32,
+    from: Position,
+    to: Position,
+) {
+    let local_color = match session {
+        Some(online) => online.local_color(),
+        None => return,
+    };
+
+    let candidate = AutoMove { from, to };
+
+    if *queued_auto_move == Some(candidate) {
+        *queued_auto_move = None;
+        set_status_message(
+            status_message,
+            status_visible,
+            status_expire_turn,
+            status_started_at,
+            "Queued move canceled",
+            turn_count,
+        );
+        return;
+    }
+
+    if is_move_legal_for_color(game, from, to, local_color) {
+        *queued_auto_move = Some(candidate);
+        set_status_message(
+            status_message,
+            status_visible,
+            status_expire_turn,
+            status_started_at,
+            "Queued auto move",
+            turn_count,
+        );
+    } else {
+        set_status_message(
+            status_message,
+            status_visible,
+            status_expire_turn,
+            status_started_at,
+            "Can't queue that move",
+            turn_count,
+        );
+    }
+}
+
 fn try_local_move(
     game: &mut Game,
     move_history: &mut MoveHistory,
+    clock: &mut ChessClock,
     session: &Option<OnlineSession>,
     game_over: &mut bool,
+    game_over_banner_visible: &mut bool,
     winner: &mut Option<PieceColor>,
     status_message: &mut Option<String>,
+    status_visible: &mut bool,
+    status_expire_turn: &mut Option<u32>,
+    status_started_at: &mut Option<f64>,
+    turn_count: u32,
     from: Position,
     to: Position,
 ) {
@@ -652,35 +967,90 @@ fn try_local_move(
             if game.get_legal_moves(from).contains(&to) {
                 if let Some(online) = session {
                     online.send(NetworkCommand::SubmitMove(from, to));
-                    *status_message = Some("Move sent to host".to_string());
+                    set_status_message(
+                        status_message,
+                        status_visible,
+                        status_expire_turn,
+                        status_started_at,
+                        "Move sent to host",
+                        turn_count,
+                    );
                 }
             } else {
-                *status_message = Some("Illegal move".to_string());
+                set_status_message(
+                    status_message,
+                    status_visible,
+                    status_expire_turn,
+                    status_started_at,
+                    "Illegal move",
+                    turn_count,
+                );
             }
         }
         Some(SessionRole::Host) => {
+            let mover = game.current_turn;
             if game.make_move(from, to).is_ok() {
                 move_history.add_move(from, to);
+                clock.apply_increment(mover, get_time());
                 update_game_over_state(game, game_over, winner);
+                *game_over_banner_visible = true;
 
                 if let Some(online) = session {
                     online.send(NetworkCommand::BroadcastMove(from, to));
                 }
 
-                *status_message = Some("Move sent to opponent".to_string());
+                set_status_message(
+                    status_message,
+                    status_visible,
+                    status_expire_turn,
+                    status_started_at,
+                    "Move sent to opponent",
+                    turn_count,
+                );
             } else {
-                *status_message = Some("Illegal move".to_string());
+                set_status_message(
+                    status_message,
+                    status_visible,
+                    status_expire_turn,
+                    status_started_at,
+                    "Illegal move",
+                    turn_count,
+                );
             }
         }
         Some(SessionRole::Local) | None => {
+            let mover = game.current_turn;
             if game.make_move(from, to).is_ok() {
                 move_history.add_move(from, to);
+                clock.apply_increment(mover, get_time());
                 update_game_over_state(game, game_over, winner);
+                *game_over_banner_visible = true;
             } else {
-                *status_message = Some("Illegal move".to_string());
+                set_status_message(
+                    status_message,
+                    status_visible,
+                    status_expire_turn,
+                    status_started_at,
+                    "Illegal move",
+                    turn_count,
+                );
             }
         }
     }
+}
+
+fn set_status_message(
+    status_message: &mut Option<String>,
+    status_visible: &mut bool,
+    status_expire_turn: &mut Option<u32>,
+    status_started_at: &mut Option<f64>,
+    message: &str,
+    turn_count: u32,
+) {
+    *status_message = Some(message.to_string());
+    *status_visible = true;
+    *status_expire_turn = Some(turn_count + 1);
+    *status_started_at = Some(get_time());
 }
 
 fn draw_selected(current_tile_size: f32) {

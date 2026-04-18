@@ -5,6 +5,7 @@ use std::thread;
 
 use crate::game::Position;
 use crate::pieces::Color;
+use crate::time_control::TimeControl;
 
 #[derive(Clone, Debug)]
 pub enum SessionConfig {
@@ -24,6 +25,7 @@ pub enum SessionRole {
 pub enum NetworkEvent {
     WaitingForOpponent(String),
     Connected(String),
+    TimeControlUpdated(TimeControl),
     RemoteMove(Position, Position),
     InvalidMove(String),
     Disconnected(String),
@@ -46,11 +48,11 @@ pub struct OnlineSession {
 }
 
 impl OnlineSession {
-    pub fn host(bind_addr: String) -> Self {
+    pub fn host(bind_addr: String, time_control: TimeControl) -> Self {
         let (cmd_tx, cmd_rx) = mpsc::channel();
         let (event_tx, event_rx) = mpsc::channel();
 
-        thread::spawn(move || run_host(bind_addr, cmd_rx, event_tx));
+        thread::spawn(move || run_host(bind_addr, time_control, cmd_rx, event_tx));
 
         Self {
             role: SessionRole::Host,
@@ -97,7 +99,12 @@ impl Drop for OnlineSession {
     }
 }
 
-fn run_host(bind_addr: String, cmd_rx: Receiver<NetworkCommand>, event_tx: Sender<NetworkEvent>) {
+fn run_host(
+    bind_addr: String,
+    time_control: TimeControl,
+    cmd_rx: Receiver<NetworkCommand>,
+    event_tx: Sender<NetworkEvent>,
+) {
     let listener = match TcpListener::bind(&bind_addr) {
         Ok(listener) => listener,
         Err(err) => {
@@ -111,7 +118,7 @@ fn run_host(bind_addr: String, cmd_rx: Receiver<NetworkCommand>, event_tx: Sende
 
     let _ = event_tx.send(NetworkEvent::WaitingForOpponent(bind_addr.clone()));
 
-    let (stream, peer_addr) = match listener.accept() {
+    let (mut stream, peer_addr) = match listener.accept() {
         Ok(connection) => connection,
         Err(err) => {
             let _ = event_tx.send(NetworkEvent::Error(format!("Accept failed: {}", err)));
@@ -120,6 +127,15 @@ fn run_host(bind_addr: String, cmd_rx: Receiver<NetworkCommand>, event_tx: Sende
     };
 
     let _ = stream.set_nodelay(true);
+
+    if let Err(err) = stream.write_all(format_time_control_line(time_control).as_bytes()) {
+        let _ = event_tx.send(NetworkEvent::Error(format!(
+            "Failed to send time control: {}",
+            err
+        )));
+        return;
+    }
+
     let _ = event_tx.send(NetworkEvent::Connected(peer_addr.to_string()));
 
     let reader_stream = match stream.try_clone() {
@@ -225,7 +241,9 @@ fn client_reader_loop(stream: TcpStream, event_tx: Sender<NetworkEvent>) {
             Ok(_) => {
                 let trimmed = line.trim();
 
-                if let Some((from, to)) = parse_move_line(trimmed, "APPLY") {
+                if let Some(time_control) = parse_time_control_line(trimmed) {
+                    let _ = event_tx.send(NetworkEvent::TimeControlUpdated(time_control));
+                } else if let Some((from, to)) = parse_move_line(trimmed, "APPLY") {
                     let _ = event_tx.send(NetworkEvent::RemoteMove(from, to));
                 } else if let Some(reason) = trimmed.strip_prefix("INVALID ") {
                     let _ = event_tx.send(NetworkEvent::InvalidMove(reason.to_string()));
@@ -279,6 +297,13 @@ fn format_move_line(prefix: &str, from: Position, to: Position) -> String {
     )
 }
 
+fn format_time_control_line(time_control: TimeControl) -> String {
+    format!(
+        "CONFIG {} {}\n",
+        time_control.initial_seconds, time_control.increment_seconds
+    )
+}
+
 fn parse_move_line(line: &str, prefix: &str) -> Option<(Position, Position)> {
     let mut parts = line.split_whitespace();
 
@@ -300,5 +325,18 @@ fn parse_move_line(line: &str, prefix: &str) -> Option<(Position, Position)> {
             row: to_row,
             col: to_col,
         },
+    ))
+}
+
+fn parse_time_control_line(line: &str) -> Option<TimeControl> {
+    let mut parts = line.split_whitespace();
+
+    if parts.next()? != "CONFIG" {
+        return None;
+    }
+
+    Some(TimeControl::new(
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
     ))
 }

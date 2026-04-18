@@ -1,19 +1,39 @@
 use macroquad::prelude::*;
 
 use crate::network::SessionConfig;
+use crate::time_control::{STANDARD_TIME_CONTROLS, TimeControl};
+
+pub struct LaunchConfig {
+    pub session: SessionConfig,
+    pub time_control: TimeControl,
+}
+
+enum StartStep {
+    ModeSelect,
+    TimeSelect(SessionConfig),
+}
 
 pub struct StartMenu {
     address_input: String,
+    step: StartStep,
 }
 
 impl StartMenu {
     pub fn new() -> Self {
         Self {
             address_input: "127.0.0.1:4000".to_string(),
+            step: StartStep::ModeSelect,
         }
     }
 
-    pub fn draw(&mut self) -> Option<SessionConfig> {
+    pub fn draw(&mut self) -> Option<LaunchConfig> {
+        match &self.step {
+            StartStep::ModeSelect => self.draw_mode_select(),
+            StartStep::TimeSelect(session) => self.draw_time_select(session.clone()),
+        }
+    }
+
+    fn draw_mode_select(&mut self) -> Option<LaunchConfig> {
         self.handle_text_input();
 
         let menu_width = 400.0;
@@ -115,20 +135,116 @@ impl StartMenu {
         // Check for clicks
         if is_mouse_button_pressed(MouseButton::Left) {
             if start_hovered {
-                return Some(SessionConfig::Local);
+                self.step = StartStep::TimeSelect(SessionConfig::Local);
             } else if instructions_hovered {
-                return Some(SessionConfig::Host {
+                self.step = StartStep::TimeSelect(SessionConfig::Host {
                     bind_addr: self.address_input.trim().to_string(),
                 });
             } else if quit_hovered {
-                return Some(SessionConfig::Join {
-                    server_addr: self.address_input.trim().to_string(),
+                return Some(LaunchConfig {
+                    session: SessionConfig::Join {
+                        server_addr: self.address_input.trim().to_string(),
+                    },
+                    time_control: STANDARD_TIME_CONTROLS[4],
                 });
             }
         }
 
         if is_key_pressed(KeyCode::Escape) {
             std::process::exit(0);
+        }
+
+        None
+    }
+
+    fn draw_time_select(&mut self, session: SessionConfig) -> Option<LaunchConfig> {
+        let menu_width = 620.0;
+        let menu_height = 560.0;
+        let menu_x = (screen_width() - menu_width) / 2.0;
+        let menu_y = (screen_height() - menu_height) / 2.0;
+
+        draw_rectangle(
+            0.0,
+            0.0,
+            screen_width(),
+            screen_height(),
+            Color::from_rgba(20, 20, 30, 255),
+        );
+        draw_rectangle(
+            menu_x,
+            menu_y,
+            menu_width,
+            menu_height,
+            Color::from_rgba(40, 40, 50, 255),
+        );
+        draw_rectangle_lines(menu_x, menu_y, menu_width, menu_height, 4.0, GOLD);
+
+        draw_text(
+            "Choose Time Control",
+            menu_x + 92.0,
+            menu_y + 70.0,
+            42.0,
+            WHITE,
+        );
+        draw_text(
+            "Standard chess formats, including increment",
+            menu_x + 84.0,
+            menu_y + 108.0,
+            24.0,
+            LIGHTGRAY,
+        );
+
+        let columns = 2;
+        let button_width = 230.0;
+        let button_height = 54.0;
+        let spacing_x = 28.0;
+        let spacing_y = 18.0;
+        let grid_x = menu_x + 64.0;
+        let grid_y = menu_y + 150.0;
+
+        for (index, time_control) in STANDARD_TIME_CONTROLS.iter().enumerate() {
+            let col = index % columns;
+            let row = index / columns;
+            let x = grid_x + col as f32 * (button_width + spacing_x);
+            let y = grid_y + row as f32 * (button_height + spacing_y);
+            let hovered = Self::is_button_hovered(x, y, button_width, button_height);
+            Self::draw_button(
+                &time_control.label(),
+                x,
+                y,
+                button_width,
+                button_height,
+                hovered,
+            );
+
+            if hovered && is_mouse_button_pressed(MouseButton::Left) {
+                return Some(LaunchConfig {
+                    session: session.clone(),
+                    time_control: *time_control,
+                });
+            }
+        }
+
+        let back_x = menu_x + 64.0;
+        let back_y = menu_y + menu_height - 80.0;
+        let back_width = 160.0;
+        let back_height = 48.0;
+        let back_hovered = Self::is_button_hovered(back_x, back_y, back_width, back_height);
+        Self::draw_button(
+            "Back",
+            back_x,
+            back_y,
+            back_width,
+            back_height,
+            back_hovered,
+        );
+
+        if back_hovered && is_mouse_button_pressed(MouseButton::Left) {
+            self.step = StartStep::ModeSelect;
+        }
+
+        if is_key_pressed(KeyCode::Escape) {
+            self.step = StartStep::ModeSelect;
         }
 
         None

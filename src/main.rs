@@ -14,6 +14,7 @@ mod game;
 mod gates;
 mod network;
 mod pieces;
+mod time_control;
 
 use crate::board::create_board;
 use crate::game::Game;

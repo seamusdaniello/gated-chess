@@ -1,17 +1,33 @@
 use crate::game::Position;
 use macroquad::prelude::*;
 
+struct MoveEntry {
+    from: Position,
+    to: Position,
+    added_at: f64,
+}
+
 pub struct MoveHistory {
-    moves: Vec<(Position, Position)>,
+    moves: Vec<MoveEntry>,
+    visible: bool,
+    collapsed: bool,
 }
 
 impl MoveHistory {
     pub fn new() -> Self {
-        Self { moves: Vec::new() }
+        Self {
+            moves: Vec::new(),
+            visible: true,
+            collapsed: false,
+        }
     }
 
     pub fn add_move(&mut self, from: Position, to: Position) {
-        self.moves.push((from, to));
+        self.moves.push(MoveEntry {
+            from,
+            to,
+            added_at: get_time(),
+        });
     }
 
     pub fn position_to_algebraic(pos: &Position) -> String {
@@ -30,12 +46,20 @@ impl MoveHistory {
         }
     }
 
-    pub fn draw(&self, _tile_size: f32) {
-        let _panel_y = 20.0;
+    pub fn draw(&mut self, _tile_size: f32, current_time: f64) {
+        if !self.visible || self.collapsed {
+            self.draw_collapsed_tab();
+            return;
+        }
+
         let panel_width = 250.0;
         let panel_height = screen_height() - 40.0;
         let panel_x = screen_width() - panel_width - 20.0;
         let panel_y = 20.0;
+        let button_size = 26.0;
+        let collapse_x = panel_x + panel_width - (button_size * 2.0) - 18.0;
+        let close_x = panel_x + panel_width - button_size - 10.0;
+        let button_y = panel_y + 8.0;
 
         // Draw background panel
         draw_rectangle(
@@ -49,6 +73,8 @@ impl MoveHistory {
 
         // Draw title
         draw_text("Move History", panel_x + 10.0, panel_y + 30.0, 24.0, WHITE);
+        self.draw_button(collapse_x, button_y, button_size, "<");
+        self.draw_button(close_x, button_y, button_size, "X");
 
         // Draw moves
         let start_y = panel_y + 50.0;
@@ -60,10 +86,75 @@ impl MoveHistory {
             0
         };
 
-        for (i, (from, to)) in self.moves.iter().enumerate().skip(start_idx) {
-            let move_text = self.format_move(i, *from, *to);
+        for (i, entry) in self.moves.iter().enumerate().skip(start_idx) {
+            let move_text = self.format_move(i, entry.from, entry.to);
+            let visible_chars = typed_char_count(&move_text, current_time - entry.added_at, 28.0);
+            let typed_text: String = move_text.chars().take(visible_chars).collect();
             let y_pos = start_y + ((i - start_idx) as f32 * line_height);
-            draw_text(&move_text, panel_x + 15.0, y_pos, 20.0, WHITE);
+            draw_text(&typed_text, panel_x + 15.0, y_pos, 20.0, WHITE);
         }
+
+        if is_mouse_button_pressed(MouseButton::Left) {
+            if is_hovered(collapse_x, button_y, button_size, button_size) {
+                self.collapsed = true;
+            } else if is_hovered(close_x, button_y, button_size, button_size) {
+                self.visible = false;
+            }
+        }
+    }
+
+    fn draw_collapsed_tab(&mut self) {
+        let tab_width = 38.0;
+        let tab_height = 48.0;
+        let tab_x = screen_width() - tab_width;
+        let tab_y = 24.0;
+
+        draw_rectangle(
+            tab_x,
+            tab_y,
+            tab_width,
+            tab_height,
+            Color::from_rgba(40, 40, 40, 230),
+        );
+        draw_rectangle_lines(tab_x, tab_y, tab_width, tab_height, 2.0, WHITE);
+        draw_text("<", tab_x + 10.0, tab_y + 30.0, 28.0, WHITE);
+
+        if is_mouse_button_pressed(MouseButton::Left)
+            && is_hovered(tab_x, tab_y, tab_width, tab_height)
+        {
+            self.visible = true;
+            self.collapsed = false;
+        }
+    }
+
+    fn draw_button(&self, x: f32, y: f32, size: f32, label: &str) {
+        let hovered = is_hovered(x, y, size, size);
+        draw_rectangle(
+            x,
+            y,
+            size,
+            size,
+            if hovered {
+                Color::from_rgba(80, 80, 90, 255)
+            } else {
+                Color::from_rgba(60, 60, 70, 255)
+            },
+        );
+        draw_rectangle_lines(x, y, size, size, 2.0, WHITE);
+        draw_text(label, x + 7.0, y + 19.0, 20.0, WHITE);
+    }
+}
+
+fn is_hovered(x: f32, y: f32, width: f32, height: f32) -> bool {
+    let (mx, my) = mouse_position();
+    mx >= x && mx <= x + width && my >= y && my <= y + height
+}
+
+fn typed_char_count(text: &str, elapsed: f64, chars_per_second: f64) -> usize {
+    let total = text.chars().count();
+    if elapsed <= 0.0 {
+        0
+    } else {
+        ((elapsed * chars_per_second).floor() as usize).min(total)
     }
 }
