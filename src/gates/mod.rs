@@ -12,4 +12,4 @@ pub mod gate_type;
 pub mod logic;
 
 pub use gate_type::GateType;
-pub use logic::{update_gates, update_gate_animation};
+pub use logic::{update_gate_animation, update_gates};

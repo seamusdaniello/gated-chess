@@ -8,18 +8,23 @@
 // License: MIT
 // =======================================================
 
+use crate::config::{BLACK_PAWN_ROW, WHITE_PAWN_ROW};
 use crate::game::{Game, Position};
 use crate::pieces::Color;
-use crate::config::{WHITE_PAWN_ROW, BLACK_PAWN_ROW};
 
 impl Game {
     pub(super) fn king_moves(&self, pos: Position, color: Color) -> Vec<Position> {
         let mut moves = Vec::new();
 
         let offsets = [
-            (-1, -1), (-1, 0), (-1, 1),
-            (0, -1),           (0, 1),
-            (1, -1),  (1, 0),  (1, 1),
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
         ];
 
         for (dr, dc) in offsets {
@@ -32,45 +37,17 @@ impl Game {
 
         moves
     }
-    
+
     pub(super) fn queen_moves(&self, pos: Position, color: Color) -> Vec<Position> {
         let mut moves = Vec::new();
 
         let directions = [
             // Rook directions
-            (-1, 0), (1, 0), (0, -1), (0, 1),
-            // Bishop directions
-            (-1, -1), (-1, 1), (1, -1), (1, 1),
-        ];
-
-        for (dr, dc) in directions {
-            moves.extend(self.slide_in_direction(pos, dr, dc, color));
-        }
-
-        moves
-    }
-    
-    pub(super) fn rook_moves(&self, pos: Position, color: Color) -> Vec<Position> {
-        let mut moves = Vec::new();
-
-        let directions = [
             (-1, 0),
             (1, 0),
             (0, -1),
             (0, 1),
-        ];
-
-        for (dr, dc) in directions {
-            moves.extend(self.slide_in_direction(pos, dr, dc, color));
-        }
-
-        moves
-    }
-    
-    pub(super) fn bishop_moves(&self, pos: Position, color: Color) -> Vec<Position> {
-        let mut moves = Vec::new();
-
-        let directions = [
+            // Bishop directions
             (-1, -1),
             (-1, 1),
             (1, -1),
@@ -83,15 +60,43 @@ impl Game {
 
         moves
     }
-    
+
+    pub(super) fn rook_moves(&self, pos: Position, color: Color) -> Vec<Position> {
+        let mut moves = Vec::new();
+
+        let directions = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+
+        for (dr, dc) in directions {
+            moves.extend(self.slide_in_direction(pos, dr, dc, color));
+        }
+
+        moves
+    }
+
+    pub(super) fn bishop_moves(&self, pos: Position, color: Color) -> Vec<Position> {
+        let mut moves = Vec::new();
+
+        let directions = [(-1, -1), (-1, 1), (1, -1), (1, 1)];
+
+        for (dr, dc) in directions {
+            moves.extend(self.slide_in_direction(pos, dr, dc, color));
+        }
+
+        moves
+    }
+
     pub(super) fn knight_moves(&self, pos: Position, color: Color) -> Vec<Position> {
         let mut moves = Vec::new();
 
         let offsets = [
-            (-2, -1), (-2, 1),
-            (-1, -2), (-1, 2),
-            (1, -2), (1, 2),
-            (2, -1), (2, 1),
+            (-2, -1),
+            (-2, 1),
+            (-1, -2),
+            (-1, 2),
+            (1, -2),
+            (1, 2),
+            (2, -1),
+            (2, 1),
         ];
 
         for (dr, dc) in offsets {
@@ -104,7 +109,7 @@ impl Game {
 
         moves
     }
-    
+
     pub(super) fn pawn_moves(&self, pos: Position, color: Color) -> Vec<Position> {
         let mut moves = Vec::new();
 
@@ -116,7 +121,8 @@ impl Game {
         // Single forward move
         if let Some(forward) = self.apply_offset(pos, direction, 0) {
             if self.board[forward.row][forward.col].piece.is_none()
-                && self.board[forward.row][forward.col].gate.is_none() {
+                && self.board[forward.row][forward.col].gate.is_none()
+            {
                 moves.push(forward);
 
                 // Double move from starting position
@@ -124,11 +130,16 @@ impl Game {
                     Color::White => WHITE_PAWN_ROW,
                     Color::Black => BLACK_PAWN_ROW,
                 };
-                
+
                 if pos.row == starting_row {
                     if let Some(double_forward) = self.apply_offset(forward, direction, 0) {
-                        if self.board[double_forward.row][double_forward.col].piece.is_none()
-                            && self.board[double_forward.row][double_forward.col].gate.is_none() {
+                        if self.board[double_forward.row][double_forward.col]
+                            .piece
+                            .is_none()
+                            && self.board[double_forward.row][double_forward.col]
+                                .gate
+                                .is_none()
+                        {
                             moves.push(double_forward);
                         }
                     }
@@ -138,7 +149,7 @@ impl Game {
 
         moves
     }
-    
+
     pub(super) fn pawn_attacks(&self, pos: Position, color: Color) -> Vec<Position> {
         let mut attacks = Vec::new();
 
@@ -157,7 +168,7 @@ impl Game {
                 }
             }
         }
-        
+
         attacks
     }
 }

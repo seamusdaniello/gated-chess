@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use crate::board::{Square};
-use crate::pieces::{Piece, PieceId};
-use crate::pieces::piece_fsm::*;
-use crate::pieces::piece_fsm::PieceFSM;
+use crate::board::Square;
 use crate::game::Position;
+use crate::pieces::piece_fsm::PieceFSM;
+use crate::pieces::piece_fsm::*;
+use crate::pieces::{Piece, PieceId};
+use std::collections::HashMap;
 
 pub struct GameStateManager {
     pub piece_fsms: HashMap<PieceId, Box<dyn PieceFSM>>,
@@ -59,7 +59,7 @@ impl<'a> GameStateManager {
                 updates.push((pos, updated_piece));
             }
         }
-        
+
         for (pos, piece) in updates {
             if board[pos.row][pos.col].piece.is_some() {
                 board[pos.row][pos.col].piece = Some(piece);

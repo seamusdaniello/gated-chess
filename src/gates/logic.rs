@@ -11,7 +11,7 @@
 use crate::game::Game;
 use crate::gates::GateType;
 
-pub fn update_gates(game:&mut Game) {
+pub fn update_gates(game: &mut Game) {
     for row in game.board.iter_mut() {
         for square in row.iter_mut() {
             if let Some(gate) = square.gate {
@@ -23,7 +23,9 @@ pub fn update_gates(game:&mut Game) {
                             if new_duration == 0 {
                                 square.gate = None;
                             } else {
-                                square.gate = Some(GateType::Standard { duration: new_duration });
+                                square.gate = Some(GateType::Standard {
+                                    duration: new_duration,
+                                });
                             }
                         }
                     }

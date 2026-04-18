@@ -28,4 +28,3 @@ impl GateTextures {
         Self { tex_vector }
     }
 }
-

@@ -18,12 +18,14 @@ impl PieceFSM for QueenFSM {
         dbg!("Queen color is ", self.piece.color);
     }
     fn update_color(&mut self) {
-        if self.piece.get_color() == crate::pieces::Color::White  {
+        if self.piece.get_color() == crate::pieces::Color::White {
             self.piece.color = crate::pieces::Color::Black;
         } else {
             self.piece.color = crate::pieces::Color::White;
         }
     }
 
-    fn piece(&self) -> &Piece { &self.piece }
+    fn piece(&self) -> &Piece {
+        &self.piece
+    }
 }

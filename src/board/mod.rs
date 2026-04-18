@@ -11,20 +11,26 @@
 pub mod square;
 pub use square::Square;
 
-use crate::pieces::Piece;
-use crate::config::BOARD_SIZE; // Import board size constant
+use crate::config::BOARD_SIZE;
+use crate::pieces::Piece; // Import board size constant
 
 pub fn create_board() -> [[Square; BOARD_SIZE]; BOARD_SIZE] {
     let mut board = [[Square::new(); BOARD_SIZE]; BOARD_SIZE];
 
     // Place White pawns
     for i in 0..BOARD_SIZE {
-        board[1][i].piece = Some(Piece::new(crate::pieces::PieceType::Pawn, crate::pieces::Color::White));
+        board[1][i].piece = Some(Piece::new(
+            crate::pieces::PieceType::Pawn,
+            crate::pieces::Color::White,
+        ));
     }
 
     // Place Black pawns
     for i in 0..BOARD_SIZE {
-        board[6][i].piece = Some(Piece::new(crate::pieces::PieceType::Pawn, crate::pieces::Color::Black));
+        board[6][i].piece = Some(Piece::new(
+            crate::pieces::PieceType::Pawn,
+            crate::pieces::Color::Black,
+        ));
     }
 
     // Place other pieces

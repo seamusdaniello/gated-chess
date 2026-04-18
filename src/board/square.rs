@@ -8,8 +8,8 @@
 // License: MIT
 // =======================================================
 
-use crate::pieces::{ Piece }; // Import from pieces module
-use crate::gates::{ GateType };
+use crate::gates::GateType;
+use crate::pieces::Piece; // Import from pieces module
 
 #[derive(Clone, Copy, Debug)]
 pub struct Square {

@@ -8,18 +8,19 @@
 // =======================================================
 
 mod board;
-mod pieces;
-mod gates;
-mod game;
 mod config;
 mod frontend; // <-- your GUI code lives in src/frontend/mod.rs
+mod game;
+mod gates;
+mod network;
+mod pieces;
 
 use crate::board::create_board;
 use crate::game::Game;
 
 #[macroquad::main("GatedChess")]
 async fn main() {
-        // create engine state
+    // create engine state
     let board = create_board();
     let game = Game::new(board);
 

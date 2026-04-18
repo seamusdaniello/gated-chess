@@ -15,5 +15,7 @@ impl PieceFSM for KingFSM {
     fn update_state(&mut self) {}
     fn update_color(&mut self) {}
 
-    fn piece(&self) -> &Piece { &self.piece }
+    fn piece(&self) -> &Piece {
+        &self.piece
+    }
 }

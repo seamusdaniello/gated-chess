@@ -14,8 +14,8 @@ pub mod state_machine;
 use macroquad::rand::gen_range;
 
 use crate::board::Square;
-use crate::pieces::{Color, PieceType};
 use crate::config::BOARD_SIZE;
+use crate::pieces::{Color, PieceType};
 
 use crate::game::state_machine::GameStateManager;
 
@@ -25,8 +25,7 @@ pub struct Position {
     pub col: usize,
 }
 
-impl Position {
-}
+impl Position {}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MoveError {
@@ -51,7 +50,7 @@ pub struct Game {
 
 impl Game {
     pub fn new(mut board: [[Square; BOARD_SIZE]; BOARD_SIZE]) -> Game {
-        let mut state_manager= GameStateManager::new();
+        let mut state_manager = GameStateManager::new();
         state_manager.register_all_pieces(&mut board);
 
         Game {
@@ -65,7 +64,7 @@ impl Game {
     pub fn get_all_legal_moves(&self, color: Color) -> Vec<Position> {
         use moves::generation::get_piece_moves;
         let mut all_moves = Vec::new();
-        
+
         for row in 0..BOARD_SIZE {
             for col in 0..BOARD_SIZE {
                 if let Some(piece) = self.board[row][col].piece {
@@ -102,7 +101,7 @@ impl Game {
         self.check_game_result();
 
         self.state_manager.update_all_fsm(&mut self.board);
-        
+
         Ok(())
     }
 
@@ -115,17 +114,17 @@ impl Game {
 
     pub fn get_legal_moves(&self, pos: Position) -> Vec<Position> {
         use moves::generation::get_piece_moves;
-        
+
         if let Some(piece) = self.board[pos.row][pos.col].piece {
             if piece.color != self.current_turn {
                 return Vec::new();
             }
-            
+
             let mut moves = get_piece_moves(self, pos, piece.color);
-            
+
             // Filter out moves that leave king in check
             moves.retain(|&to| !self.leaves_king_in_check(pos, to, piece.color));
-            
+
             moves
         } else {
             Vec::new()
@@ -135,9 +134,12 @@ impl Game {
     pub(crate) fn apply_offset(&self, pos: Position, dr: i32, dc: i32) -> Option<Position> {
         let new_row = pos.row as i32 + dr;
         let new_col = pos.col as i32 + dc;
-        
-        if new_row >= 0 && new_row < BOARD_SIZE as i32 &&
-           new_col >= 0 && new_col < BOARD_SIZE as i32 {
+
+        if new_row >= 0
+            && new_row < BOARD_SIZE as i32
+            && new_col >= 0
+            && new_col < BOARD_SIZE as i32
+        {
             Some(Position {
                 row: new_row as usize,
                 col: new_col as usize,
@@ -154,13 +156,13 @@ impl Game {
             return false;
         }
         let king_pos = king_pos.unwrap();
-        
+
         // Check if any opponent piece can attack the king
         let opponent_color = match color {
             Color::White => Color::Black,
             Color::Black => Color::White,
         };
-        
+
         for row in 0..BOARD_SIZE {
             for col in 0..BOARD_SIZE {
                 if let Some(piece) = self.board[row][col].piece {
@@ -174,7 +176,7 @@ impl Game {
                 }
             }
         }
-        
+
         false
     }
 
@@ -182,19 +184,19 @@ impl Game {
         // Checkmate: king is in check AND has no legal moves
         self.is_king_in_check(color) && self.get_all_legal_moves(color).is_empty()
     }
-    
+
     pub fn is_stalemate(&self, color: Color) -> bool {
         // Stalemate: king is NOT in check BUT has no legal moves
         !self.is_king_in_check(color) && self.get_all_legal_moves(color).is_empty()
     }
-    
+
     pub fn check_game_result(&mut self) {
         // Check the state of the game after each move
         let opponent_color = match self.current_turn {
             Color::White => Color::Black,
             Color::Black => Color::White,
         };
-        
+
         if self.is_checkmate(opponent_color) {
             // The opponent is in checkmate, so current player wins
             self.result = GameResult::Checkmate(self.current_turn);
@@ -230,7 +232,9 @@ impl Game {
                 let dc_step = if dc != 0 { dc / dc.abs() } else { 0 };
 
                 for i in 1..steps {
-                    if let Some(pos) = self.apply_offset(from, dr_step * i as i32, dc_step * i as i32) {
+                    if let Some(pos) =
+                        self.apply_offset(from, dr_step * i as i32, dc_step * i as i32)
+                    {
                         path.push(pos);
                     }
                 }
@@ -251,10 +255,10 @@ impl Game {
                 self.state_manager.piece_positions.remove(&captured.id);
             }
         }
-        
+
         // Move the piece
         self.board[to.row][to.col].piece = self.board[from.row][from.col].piece.take();
-        
+
         // Create gates for rook/bishop moves
         if let Some(p) = piece {
             match p.kind {
@@ -263,9 +267,8 @@ impl Game {
                     for pos in path {
                         // Only create gate if square is empty (don't overwrite pieces)
                         if self.board[pos.row][pos.col].piece.is_none() {
-                            self.board[pos.row][pos.col].gate = Some(
-                                crate::gates::GateType::Standard { duration: 2 }
-                            );
+                            self.board[pos.row][pos.col].gate =
+                                Some(crate::gates::GateType::Standard { duration: 2 });
                             self.board[pos.row][pos.col].animation_direction = Some(1);
                             self.board[pos.row][pos.col].animation_frame = Some(gen_range(0, 7));
                         }
@@ -276,17 +279,23 @@ impl Game {
         }
     }
 
-    pub(crate) fn slide_in_direction(&self, pos: Position, dr: i32, dc: i32, color: Color) -> Vec<Position> {
+    pub(crate) fn slide_in_direction(
+        &self,
+        pos: Position,
+        dr: i32,
+        dc: i32,
+        color: Color,
+    ) -> Vec<Position> {
         let mut moves = Vec::new();
         let mut current = pos;
-        
+
         loop {
             if let Some(next) = self.apply_offset(current, dr, dc) {
                 // Check for gates first - gates block movement
                 if self.board[next.row][next.col].gate.is_some() {
                     break; // Gate blocks movement
                 }
-                
+
                 // Then check for pieces
                 if let Some(piece) = self.board[next.row][next.col].piece {
                     if piece.color != color {
@@ -301,7 +310,7 @@ impl Game {
                 break;
             }
         }
-        
+
         moves
     }
 
