@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "relay"]
+resolver = "2"
+
 [package]
 name = "gated_chess"
 version = "0.1.0"

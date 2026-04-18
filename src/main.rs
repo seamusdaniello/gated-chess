@@ -16,14 +16,7 @@ mod network;
 mod pieces;
 mod time_control;
 
-use crate::board::create_board;
-use crate::game::Game;
-
 #[macroquad::main("GatedChess")]
 async fn main() {
-    // create engine state
-    let board = create_board();
-    let game = Game::new(board);
-
-    frontend::run_ui(game).await;
+    frontend::run_ui().await;
 }

@@ -1,3 +1,4 @@
+use crate::board::create_board;
 use crate::frontend::load_pieces::AnimationState;
 use crate::game::moves::generation::get_piece_moves;
 use crate::game::{Game, Position};
@@ -6,7 +7,7 @@ use crate::gates::update_gates;
 use crate::network::{NetworkCommand, NetworkEvent, OnlineSession, SessionConfig, SessionRole};
 use crate::pieces::Color as PieceColor;
 use crate::pieces::Color::{Black, White};
-use crate::time_control::TimeControl;
+use crate::pieces::Piece;
 use macroquad::prelude::*;
 
 mod chess_clock;
@@ -25,7 +26,7 @@ use load_gates::GateTextures;
 use load_pieces::PieceTextures;
 use move_history::MoveHistory;
 use session_banner::draw_status;
-use start_menu::{LaunchConfig, StartMenu};
+use start_menu::StartMenu;
 
 static mut SELECTED: Option<Position> = None;
 static mut HOVERED: Option<Position> = None;
@@ -79,68 +80,96 @@ impl PieceAnimationState {
     }
 }
 
-pub async fn run_ui(mut game: Game) {
-    let mut in_menu = true;
-    let mut start_menu = StartMenu::new();
-    let mut launch_config = LaunchConfig {
-        session: SessionConfig::Local,
-        time_control: TimeControl::new(180, 2),
-    };
+struct PieceSnapAnimation {
+    piece: Piece,
+    from: Position,
+    to: Position,
+    start_time: f32,
+}
 
-    while in_menu {
-        clear_background(BLACK);
+impl PieceSnapAnimation {
+    const DURATION: f32 = 0.13;
 
-        if let Some(config) = start_menu.draw() {
-            launch_config = config;
-            in_menu = false;
-        }
-
-        next_frame().await;
+    fn new(from: Position, to: Position, piece: Piece, now: f32) -> Self {
+        Self { piece, from, to, start_time: now }
     }
 
+    fn is_complete(&self, now: f32) -> bool {
+        now >= self.start_time + Self::DURATION
+    }
+
+    fn current_pos(&self, now: f32, tile_size: f32) -> Vec2 {
+        let t = ((now - self.start_time) / Self::DURATION).clamp(0.0, 1.0);
+        let eased = 1.0 - (1.0 - t).powi(3); // cubic ease-out: fast snap, soft land
+        let from_w = vec2(self.from.col as f32 * tile_size, self.from.row as f32 * tile_size);
+        let to_w = vec2(self.to.col as f32 * tile_size, self.to.row as f32 * tile_size);
+        from_w.lerp(to_w, eased)
+    }
+}
+
+pub async fn run_ui() {
     let board_frame = BoardFrame::load("images/frames/frame-1.png").await;
     let piece_textures = PieceTextures::load().await;
     let gate_textures = GateTextures::load().await;
-    let mut last_turn = game.current_turn;
-
     let light_tile = load_texture("images/panel/white-panel.png").await.unwrap();
     let dark_tile = load_texture("images/panel/black-panel.png").await.unwrap();
 
-    let mut last_update = 0.0;
-    let mut move_history = MoveHistory::new();
-    let session = match &launch_config.session {
-        SessionConfig::Local => None,
-        SessionConfig::Host { bind_addr } => Some(OnlineSession::host(
-            bind_addr.clone(),
-            launch_config.time_control,
-        )),
-        SessionConfig::Join { server_addr } => Some(OnlineSession::join(server_addr.clone())),
-        SessionConfig::FindMatch { addr } => Some(OnlineSession::find_match(
-            addr.clone(),
-            launch_config.time_control,
-        )),
-    };
-    let mut clock = ChessClock::new(launch_config.time_control, get_time());
-    let mut status_message = match &launch_config.session {
-        SessionConfig::Local => None,
-        SessionConfig::Host { bind_addr } => Some(format!("Hosting on {}", bind_addr)),
-        SessionConfig::Join { server_addr } => Some(format!("Connecting to {}", server_addr)),
-        SessionConfig::FindMatch { addr } => Some(format!("Searching for match at {}", addr)),
-    };
-    let mut status_visible = status_message.is_some();
-    let mut status_expire_turn: Option<u32> = status_message.as_ref().map(|_| 1);
-    let mut status_started_at = status_message.as_ref().map(|_| get_time());
-    let mut connection_ready = matches!(launch_config.session, SessionConfig::Local);
+    'main: loop {
+        let board = create_board();
+        let mut game = Game::new(board);
+        unsafe {
+            SELECTED = None;
+            HOVERED = None;
+            HIGHLIGHTED_COLUMN = None;
+            TYPING_MODE = false;
+        }
 
-    let mut game_over = false;
-    let mut game_over_banner_visible = true;
-    let mut winner: Option<crate::pieces::Color> = None;
-    let mut turn_count: u32 = 0;
-    let mut queued_auto_move: Option<AutoMove> = None;
+        let mut start_menu = StartMenu::new();
+        let launch_config = loop {
+            clear_background(BLACK);
+            if let Some(config) = start_menu.draw() {
+                break config;
+            }
+            next_frame().await;
+        };
 
-    // Initialize piece animation state
-    let mut piece_anim_state = PieceAnimationState::new(0.3); // 10 FPS animation
-    let mut animations_enabled = true;
+        let mut last_turn = game.current_turn;
+        let mut last_update = 0.0;
+        let mut move_history = MoveHistory::new();
+        let session = match &launch_config.session {
+            SessionConfig::Local => None,
+            SessionConfig::Host { bind_addr } => Some(OnlineSession::host(
+                bind_addr.clone(),
+                launch_config.time_control,
+            )),
+            SessionConfig::Join { server_addr } => Some(OnlineSession::join(server_addr.clone())),
+            SessionConfig::FindMatch { addr } => Some(OnlineSession::find_match(
+                addr.clone(),
+                launch_config.time_control,
+            )),
+        };
+        let mut clock = ChessClock::new(launch_config.time_control, get_time());
+        let mut status_message = match &launch_config.session {
+            SessionConfig::Local => None,
+            SessionConfig::Host { bind_addr } => Some(format!("Hosting on {}", bind_addr)),
+            SessionConfig::Join { server_addr } => Some(format!("Connecting to {}", server_addr)),
+            SessionConfig::FindMatch { addr } => Some(format!("Searching for match at {}", addr)),
+        };
+        let mut status_visible = status_message.is_some();
+        let mut status_expire_turn: Option<u32> = status_message.as_ref().map(|_| 1);
+        let mut status_started_at = status_message.as_ref().map(|_| get_time());
+        let mut connection_ready = matches!(launch_config.session, SessionConfig::Local);
+
+        let mut game_over = false;
+        let mut game_over_banner_visible = true;
+        let mut winner: Option<crate::pieces::Color> = None;
+        let mut turn_count: u32 = 0;
+        let mut queued_auto_move: Option<AutoMove> = None;
+
+        let mut piece_anim_state = PieceAnimationState::new(0.3);
+        let mut animations_enabled = true;
+        let mut gear_open = false;
+        let mut snap_anim: Option<PieceSnapAnimation> = None;
 
     loop {
         let now = get_time();
@@ -200,6 +229,9 @@ pub async fn run_ui(mut game: Game) {
                     if is_host {
                         let mover = game.current_turn;
                         if game.make_move(from, to).is_ok() {
+                            if let Some(piece) = game.board[to.row][to.col].piece {
+                                snap_anim = Some(PieceSnapAnimation::new(from, to, piece, now as f32));
+                            }
                             move_history.add_move(from, to);
                             clock.apply_increment(mover, now);
                             set_status_message(
@@ -223,6 +255,9 @@ pub async fn run_ui(mut game: Game) {
                     } else {
                         let mover = game.current_turn;
                         if game.make_move(from, to).is_ok() {
+                            if let Some(piece) = game.board[to.row][to.col].piece {
+                                snap_anim = Some(PieceSnapAnimation::new(from, to, piece, now as f32));
+                            }
                             move_history.add_move(from, to);
                             clock.apply_increment(mover, now);
                             set_status_message(
@@ -353,7 +388,12 @@ pub async fn run_ui(mut game: Game) {
         draw_highlighted_column(tile_size);
         draw_queued_move(tile_size, queued_auto_move);
 
-        // Update and draw pieces with animations
+        // Expire completed snap animation before drawing
+        if snap_anim.as_ref().map(|a| a.is_complete(now as f32)).unwrap_or(false) {
+            snap_anim = None;
+        }
+
+        let snap_skip = snap_anim.as_ref().map(|a| a.to);
         draw_pieces(
             &game,
             &piece_textures,
@@ -363,7 +403,11 @@ pub async fn run_ui(mut game: Game) {
             now as f32,
             board_perspective,
             animations_enabled,
+            snap_skip,
         );
+        if let Some(anim) = &snap_anim {
+            draw_snap_anim(anim, &piece_textures, tile_size, &camera, board_perspective, now as f32, animations_enabled, &mut piece_anim_state);
+        }
         draw_selected(tile_size);
 
         set_default_camera();
@@ -371,14 +415,14 @@ pub async fn run_ui(mut game: Game) {
         // Draw row numbers after resetting camera (so they're not affected by board rotation)
         draw_row_numbers(board_perspective, tile_size);
         clock.draw(game.current_turn);
-        animations_enabled = draw_animations_checkbox(animations_enabled);
 
-        // Process clicks only if game is not over
+        // Process clicks only if game is not over and the gear panel didn't consume the click
         let local_turn = can_interact(&session, connection_ready, game.current_turn);
         let can_queue_auto_move =
             can_queue_auto_move(&session, connection_ready, game.current_turn);
+        let gear_hit = gear_panel_hit(gear_open);
 
-        if !game_over && local_turn {
+        if !game_over && local_turn && !gear_hit {
             if let Some(auto_move) = queued_auto_move {
                 let local_color = local_player_color(&session, game.current_turn);
 
@@ -418,6 +462,7 @@ pub async fn run_ui(mut game: Game) {
             // Process keyboard input first
             if let Some((from, to)) = process_keyboard_input(&game) {
                 if local_turn {
+                    let pre_piece = game.board[from.row][from.col].piece;
                     try_local_move(
                         &mut game,
                         &mut move_history,
@@ -434,6 +479,11 @@ pub async fn run_ui(mut game: Game) {
                         from,
                         to,
                     );
+                    if pre_piece.is_some() && game.board[from.row][from.col].piece.is_none() {
+                        if let Some(piece) = game.board[to.row][to.col].piece {
+                            snap_anim = Some(PieceSnapAnimation::new(from, to, piece, now as f32));
+                        }
+                    }
                 } else {
                     update_auto_move(
                         &game,
@@ -456,8 +506,10 @@ pub async fn run_ui(mut game: Game) {
             }
 
             // Then process mouse clicks
+            if !gear_hit {
             if let Some((from, to)) = process_click(&game, &camera, tile_size) {
                 if local_turn {
+                    let pre_piece = game.board[from.row][from.col].piece;
                     try_local_move(
                         &mut game,
                         &mut move_history,
@@ -474,6 +526,11 @@ pub async fn run_ui(mut game: Game) {
                         from,
                         to,
                     );
+                    if pre_piece.is_some() && game.board[from.row][from.col].piece.is_none() {
+                        if let Some(piece) = game.board[to.row][to.col].piece {
+                            snap_anim = Some(PieceSnapAnimation::new(from, to, piece, now as f32));
+                        }
+                    }
                 } else {
                     update_auto_move(
                         &game,
@@ -492,6 +549,7 @@ pub async fn run_ui(mut game: Game) {
                     SELECTED = None;
                 }
             }
+            } // end !gear_hit
         }
 
         // Draw move history panel
@@ -504,7 +562,7 @@ pub async fn run_ui(mut game: Game) {
             }
 
             if is_key_pressed(KeyCode::Escape) {
-                break;
+                continue 'main;
             }
         }
 
@@ -524,8 +582,20 @@ pub async fn run_ui(mut game: Game) {
             }
         }
 
+        match draw_gear_panel(&mut gear_open, &mut animations_enabled, !game_over) {
+            GearAction::MainMenu => continue 'main,
+            GearAction::Forfeit => {
+                game_over = true;
+                game_over_banner_visible = true;
+                winner = Some(if game.current_turn == White { Black } else { White });
+                gear_open = false;
+            }
+            GearAction::None => {}
+        }
+
         next_frame().await;
-    }
+        } // end game loop
+    } // end 'main loop
 }
 
 fn draw_board(
@@ -560,29 +630,113 @@ fn draw_board(
     }
 }
 
-fn draw_animations_checkbox(enabled: bool) -> bool {
-    let box_x = 20.0;
-    let box_y = screen_height() / 2.0 - 15.0;
-    let box_size = 20.0;
+enum GearAction {
+    None,
+    MainMenu,
+    Forfeit,
+}
 
-    draw_rectangle(box_x, box_y, box_size, box_size, Color::from_rgba(32, 32, 40, 230));
-    draw_rectangle_lines(box_x, box_y, box_size, box_size, 2.0, WHITE);
+const GEAR_X: f32 = 20.0;
+const GEAR_Y: f32 = 12.0;
+const GEAR_SIZE: f32 = 36.0;
+const PANEL_W: f32 = 180.0;
+const PANEL_ITEM_H: f32 = 40.0;
 
-    if enabled {
-        draw_rectangle(box_x + 4.0, box_y + 4.0, box_size - 8.0, box_size - 8.0, GOLD);
+fn gear_panel_hit(open: bool) -> bool {
+    let (mx, my) = mouse_position();
+    if !is_mouse_button_pressed(MouseButton::Left) {
+        return false;
+    }
+    let btn_hit = mx >= GEAR_X && mx <= GEAR_X + GEAR_SIZE && my >= GEAR_Y && my <= GEAR_Y + GEAR_SIZE;
+    if btn_hit {
+        return true;
+    }
+    if open {
+        let panel_y = GEAR_Y + GEAR_SIZE + 4.0;
+        let panel_h = PANEL_ITEM_H * 3.0 + 8.0;
+        mx >= GEAR_X && mx <= GEAR_X + PANEL_W && my >= panel_y && my <= panel_y + panel_h
+    } else {
+        false
+    }
+}
+
+fn draw_gear_panel(open: &mut bool, animations_enabled: &mut bool, can_forfeit: bool) -> GearAction {
+    let (mx, my) = mouse_position();
+    let btn_hovered = mx >= GEAR_X && mx <= GEAR_X + GEAR_SIZE && my >= GEAR_Y && my <= GEAR_Y + GEAR_SIZE;
+
+    draw_rectangle(
+        GEAR_X,
+        GEAR_Y,
+        GEAR_SIZE,
+        GEAR_SIZE,
+        if *open || btn_hovered {
+            Color::from_rgba(80, 80, 90, 240)
+        } else {
+            Color::from_rgba(40, 40, 50, 220)
+        },
+    );
+    draw_rectangle_lines(GEAR_X, GEAR_Y, GEAR_SIZE, GEAR_SIZE, 2.0, if *open { GOLD } else { WHITE });
+    let gear_tw = measure_text("⚙", None, 26, 1.0).width;
+    draw_text("⚙", GEAR_X + (GEAR_SIZE - gear_tw) / 2.0, GEAR_Y + 26.0, 26.0, WHITE);
+
+    if btn_hovered && is_mouse_button_pressed(MouseButton::Left) {
+        *open = !*open;
+        return GearAction::None;
     }
 
-    draw_text("Animations", box_x + box_size + 8.0, box_y + box_size - 4.0, 20.0, LIGHTGRAY);
-
-    if is_mouse_button_pressed(MouseButton::Left) {
-        let (mx, my) = mouse_position();
-        let label_width = 100.0;
-        if mx >= box_x && mx <= box_x + box_size + label_width && my >= box_y && my <= box_y + box_size {
-            return !enabled;
-        }
+    if !*open {
+        return GearAction::None;
     }
 
-    enabled
+    let panel_x = GEAR_X;
+    let panel_y = GEAR_Y + GEAR_SIZE + 4.0;
+    let panel_h = PANEL_ITEM_H * 3.0 + 8.0;
+
+    draw_rectangle(panel_x, panel_y, PANEL_W, panel_h, Color::from_rgba(32, 32, 42, 240));
+    draw_rectangle_lines(panel_x, panel_y, PANEL_W, panel_h, 2.0, WHITE);
+
+    let mut action = GearAction::None;
+
+    // --- Animations toggle ---
+    let row0_y = panel_y + 4.0;
+    let row0_hovered = mx >= panel_x && mx <= panel_x + PANEL_W && my >= row0_y && my <= row0_y + PANEL_ITEM_H;
+    draw_rectangle(
+        panel_x + 2.0, row0_y, PANEL_W - 4.0, PANEL_ITEM_H,
+        if row0_hovered { Color::from_rgba(60, 60, 72, 255) } else { Color::from_rgba(0, 0, 0, 0) },
+    );
+    let anim_label = if *animations_enabled { "Animations  ON" } else { "Animations  OFF" };
+    let anim_color = if *animations_enabled { GOLD } else { LIGHTGRAY };
+    draw_text(anim_label, panel_x + 12.0, row0_y + 26.0, 20.0, anim_color);
+    if row0_hovered && is_mouse_button_pressed(MouseButton::Left) {
+        *animations_enabled = !*animations_enabled;
+    }
+
+    // --- Forfeit ---
+    let row1_y = row0_y + PANEL_ITEM_H;
+    let row1_hovered = can_forfeit && mx >= panel_x && mx <= panel_x + PANEL_W && my >= row1_y && my <= row1_y + PANEL_ITEM_H;
+    draw_rectangle(
+        panel_x + 2.0, row1_y, PANEL_W - 4.0, PANEL_ITEM_H,
+        if row1_hovered { Color::from_rgba(110, 35, 35, 255) } else { Color::from_rgba(0, 0, 0, 0) },
+    );
+    let forfeit_color = if can_forfeit { Color::from_rgba(220, 70, 70, 255) } else { DARKGRAY };
+    draw_text("Forfeit", panel_x + 12.0, row1_y + 26.0, 20.0, forfeit_color);
+    if row1_hovered && is_mouse_button_pressed(MouseButton::Left) {
+        action = GearAction::Forfeit;
+    }
+
+    // --- Main Menu ---
+    let row2_y = row1_y + PANEL_ITEM_H;
+    let row2_hovered = mx >= panel_x && mx <= panel_x + PANEL_W && my >= row2_y && my <= row2_y + PANEL_ITEM_H;
+    draw_rectangle(
+        panel_x + 2.0, row2_y, PANEL_W - 4.0, PANEL_ITEM_H,
+        if row2_hovered { Color::from_rgba(60, 60, 72, 255) } else { Color::from_rgba(0, 0, 0, 0) },
+    );
+    draw_text("Main Menu", panel_x + 12.0, row2_y + 26.0, 20.0, WHITE);
+    if row2_hovered && is_mouse_button_pressed(MouseButton::Left) {
+        action = GearAction::MainMenu;
+    }
+
+    action
 }
 
 fn draw_pieces(
@@ -594,11 +748,18 @@ fn draw_pieces(
     current_time: f32,
     perspective: PieceColor,
     animations_enabled: bool,
+    skip_pos: Option<Position>,
 ) {
+    let rotation = match perspective {
+        White => camera.rotation + std::f32::consts::PI,
+        Black => camera.rotation,
+    };
     for row in 0..8 {
         for col in 0..8 {
+            if skip_pos == Some(Position { row, col }) {
+                continue;
+            }
             if let Some(piece) = game.board[row][col].piece {
-                // Try to get animation first, fall back to static texture
                 let tex = if let Some(frames) =
                     textures.get_animation(piece.kind, piece.color, AnimationState::Idle)
                 {
@@ -609,29 +770,16 @@ fn draw_pieces(
                         &frames[0]
                     }
                 } else {
-                    // Fall back to static texture if no animation exists
                     match textures.get(piece.kind, piece.color) {
                         Some(t) => t,
-                        None => continue, // Skip if no texture at all
+                        None => continue,
                     }
-                };
-
-                // Calculate piece position
-                let draw_pos = vec2(
-                    col as f32 * current_tile_size,
-                    row as f32 * current_tile_size,
-                );
-
-                // Flip the position for black pieces relative to camera
-                let rotation = match perspective {
-                    White => camera.rotation + (std::f32::consts::PI * 1.0),
-                    Black => camera.rotation, // upside down
                 };
 
                 draw_texture_ex(
                     tex,
-                    draw_pos.x,
-                    draw_pos.y,
+                    col as f32 * current_tile_size,
+                    row as f32 * current_tile_size,
                     WHITE,
                     DrawTextureParams {
                         dest_size: Some(vec2(current_tile_size, current_tile_size)),
@@ -643,6 +791,51 @@ fn draw_pieces(
             }
         }
     }
+}
+
+fn draw_snap_anim(
+    anim: &PieceSnapAnimation,
+    textures: &PieceTextures,
+    tile_size: f32,
+    camera: &Camera2D,
+    perspective: PieceColor,
+    now: f32,
+    animations_enabled: bool,
+    anim_state: &mut PieceAnimationState,
+) {
+    let tex = if let Some(frames) =
+        textures.get_animation(anim.piece.kind, anim.piece.color, AnimationState::Idle)
+    {
+        if animations_enabled {
+            &frames[anim_state.current_frame.min(frames.len().saturating_sub(1))]
+        } else {
+            &frames[0]
+        }
+    } else {
+        match textures.get(anim.piece.kind, anim.piece.color) {
+            Some(t) => t,
+            None => return,
+        }
+    };
+
+    let pos = anim.current_pos(now, tile_size);
+    let rotation = match perspective {
+        White => camera.rotation + std::f32::consts::PI,
+        Black => camera.rotation,
+    };
+
+    draw_texture_ex(
+        tex,
+        pos.x,
+        pos.y,
+        WHITE,
+        DrawTextureParams {
+            dest_size: Some(vec2(tile_size, tile_size)),
+            rotation,
+            pivot: None,
+            ..Default::default()
+        },
+    );
 }
 
 fn process_click(

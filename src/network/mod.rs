@@ -1,9 +1,8 @@
 use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
 
 use crate::game::Position;
 use crate::pieces::Color;
@@ -249,18 +248,108 @@ fn run_find_match(
     state: Arc<Mutex<SessionState>>,
 ) {
     let _ = event_tx.send(NetworkEvent::WaitingForOpponent(format!(
-        "Searching for match at {}",
+        "Connecting to relay at {}",
         addr
     )));
 
-    if let Some(socket_addr) = resolve_socket_addr(&addr) {
-        if TcpStream::connect_timeout(&socket_addr, Duration::from_millis(700)).is_ok() {
-            run_client(addr, cmd_rx, event_tx, state);
+    let stream = match TcpStream::connect(&addr) {
+        Ok(s) => s,
+        Err(err) => {
+            let _ = event_tx.send(NetworkEvent::Error(format!(
+                "Failed to connect to relay {}: {}",
+                addr, err
+            )));
             return;
+        }
+    };
+    let _ = stream.set_nodelay(true);
+
+    let write_stream = match stream.try_clone() {
+        Ok(s) => s,
+        Err(err) => {
+            let _ = event_tx.send(NetworkEvent::Error(format!("Socket clone error: {}", err)));
+            return;
+        }
+    };
+
+    let find_msg = format!(
+        "FIND {} {}\n",
+        time_control.initial_seconds, time_control.increment_seconds
+    );
+    {
+        let mut ws = write_stream;
+        if ws.write_all(find_msg.as_bytes()).is_err() {
+            let _ = event_tx.send(NetworkEvent::Error("Failed to send FIND".to_string()));
+            return;
+        }
+        // ws dropped here; stream is the live socket going forward
+    }
+
+    let read_clone = match stream.try_clone() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let mut reader = BufReader::new(read_clone);
+    let mut assigned_role: Option<SessionRole> = None;
+    let mut assigned_color: Option<Color> = None;
+
+    loop {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => {
+                let _ =
+                    event_tx.send(NetworkEvent::Disconnected("Relay disconnected".to_string()));
+                return;
+            }
+            Ok(_) => {
+                let trimmed = line.trim();
+                if trimmed == "WAITING" {
+                    let _ = event_tx.send(NetworkEvent::WaitingForOpponent(
+                        "Waiting for opponent...".to_string(),
+                    ));
+                } else if trimmed == "START WHITE" {
+                    assigned_role = Some(SessionRole::Host);
+                    assigned_color = Some(Color::White);
+                } else if trimmed == "START BLACK" {
+                    assigned_role = Some(SessionRole::Client);
+                    assigned_color = Some(Color::Black);
+                } else if let Some(tc) = parse_time_control_line(trimmed) {
+                    let _ = event_tx.send(NetworkEvent::TimeControlUpdated(tc));
+                    break;
+                }
+            }
+            Err(err) => {
+                let _ =
+                    event_tx.send(NetworkEvent::Error(format!("Relay read error: {}", err)));
+                return;
+            }
         }
     }
 
-    run_host(addr, time_control, cmd_rx, event_tx, state);
+    let role = match assigned_role {
+        Some(r) => r,
+        None => {
+            let _ = event_tx.send(NetworkEvent::Error("No role received from relay".to_string()));
+            return;
+        }
+    };
+    let color = assigned_color.unwrap_or(Color::White);
+    set_state(&state, role, color);
+    let _ = event_tx.send(NetworkEvent::Connected("Match found!".to_string()));
+
+    let is_host = role == SessionRole::Host;
+    let reader_stream = reader.into_inner();
+    let reader_tx = event_tx.clone();
+
+    thread::spawn(move || {
+        if is_host {
+            host_reader_loop(reader_stream, reader_tx);
+        } else {
+            client_reader_loop(reader_stream, reader_tx);
+        }
+    });
+
+    writer_loop(stream, cmd_rx, event_tx, is_host);
 }
 
 fn host_reader_loop(stream: TcpStream, event_tx: Sender<NetworkEvent>) {
@@ -367,10 +456,6 @@ fn format_move_line(prefix: &str, from: Position, to: Position) -> String {
         "{} {} {} {} {}\n",
         prefix, from.row, from.col, to.row, to.col
     )
-}
-
-fn resolve_socket_addr(addr: &str) -> Option<std::net::SocketAddr> {
-    addr.to_socket_addrs().ok()?.next()
 }
 
 fn set_state(state: &Arc<Mutex<SessionState>>, role: SessionRole, local_color: Color) {
