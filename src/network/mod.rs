@@ -1,7 +1,9 @@
 use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use crate::game::Position;
 use crate::pieces::Color;
@@ -12,6 +14,7 @@ pub enum SessionConfig {
     Local,
     Host { bind_addr: String },
     Join { server_addr: String },
+    FindMatch { addr: String },
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -41,22 +44,33 @@ pub enum NetworkCommand {
 }
 
 pub struct OnlineSession {
-    role: SessionRole,
-    local_color: Color,
+    state: Arc<Mutex<SessionState>>,
     tx: Sender<NetworkCommand>,
     rx: Receiver<NetworkEvent>,
+}
+
+#[derive(Copy, Clone)]
+struct SessionState {
+    role: SessionRole,
+    local_color: Color,
 }
 
 impl OnlineSession {
     pub fn host(bind_addr: String, time_control: TimeControl) -> Self {
         let (cmd_tx, cmd_rx) = mpsc::channel();
         let (event_tx, event_rx) = mpsc::channel();
-
-        thread::spawn(move || run_host(bind_addr, time_control, cmd_rx, event_tx));
-
-        Self {
+        let state = Arc::new(Mutex::new(SessionState {
             role: SessionRole::Host,
             local_color: Color::White,
+        }));
+
+        thread::spawn({
+            let state = Arc::clone(&state);
+            move || run_host(bind_addr, time_control, cmd_rx, event_tx, state)
+        });
+
+        Self {
+            state,
             tx: cmd_tx,
             rx: event_rx,
         }
@@ -65,23 +79,55 @@ impl OnlineSession {
     pub fn join(server_addr: String) -> Self {
         let (cmd_tx, cmd_rx) = mpsc::channel();
         let (event_tx, event_rx) = mpsc::channel();
-
-        thread::spawn(move || run_client(server_addr, cmd_rx, event_tx));
-
-        Self {
+        let state = Arc::new(Mutex::new(SessionState {
             role: SessionRole::Client,
             local_color: Color::Black,
+        }));
+
+        thread::spawn({
+            let state = Arc::clone(&state);
+            move || run_client(server_addr, cmd_rx, event_tx, state)
+        });
+
+        Self {
+            state,
+            tx: cmd_tx,
+            rx: event_rx,
+        }
+    }
+
+    pub fn find_match(addr: String, time_control: TimeControl) -> Self {
+        let (cmd_tx, cmd_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::channel();
+        let state = Arc::new(Mutex::new(SessionState {
+            role: SessionRole::Host,
+            local_color: Color::White,
+        }));
+
+        thread::spawn({
+            let state = Arc::clone(&state);
+            move || run_find_match(addr, time_control, cmd_rx, event_tx, state)
+        });
+
+        Self {
+            state,
             tx: cmd_tx,
             rx: event_rx,
         }
     }
 
     pub fn role(&self) -> SessionRole {
-        self.role
+        self.state
+            .lock()
+            .map(|state| state.role)
+            .unwrap_or(SessionRole::Local)
     }
 
     pub fn local_color(&self) -> Color {
-        self.local_color
+        self.state
+            .lock()
+            .map(|state| state.local_color)
+            .unwrap_or(Color::White)
     }
 
     pub fn try_recv(&self) -> Option<NetworkEvent> {
@@ -104,7 +150,9 @@ fn run_host(
     time_control: TimeControl,
     cmd_rx: Receiver<NetworkCommand>,
     event_tx: Sender<NetworkEvent>,
+    state: Arc<Mutex<SessionState>>,
 ) {
+    set_state(&state, SessionRole::Host, Color::White);
     let listener = match TcpListener::bind(&bind_addr) {
         Ok(listener) => listener,
         Err(err) => {
@@ -159,7 +207,9 @@ fn run_client(
     server_addr: String,
     cmd_rx: Receiver<NetworkCommand>,
     event_tx: Sender<NetworkEvent>,
+    state: Arc<Mutex<SessionState>>,
 ) {
+    set_state(&state, SessionRole::Client, Color::Black);
     let stream = match TcpStream::connect(&server_addr) {
         Ok(stream) => stream,
         Err(err) => {
@@ -189,6 +239,28 @@ fn run_client(
     thread::spawn(move || client_reader_loop(reader_stream, reader_tx));
 
     writer_loop(stream, cmd_rx, event_tx, false);
+}
+
+fn run_find_match(
+    addr: String,
+    time_control: TimeControl,
+    cmd_rx: Receiver<NetworkCommand>,
+    event_tx: Sender<NetworkEvent>,
+    state: Arc<Mutex<SessionState>>,
+) {
+    let _ = event_tx.send(NetworkEvent::WaitingForOpponent(format!(
+        "Searching for match at {}",
+        addr
+    )));
+
+    if let Some(socket_addr) = resolve_socket_addr(&addr) {
+        if TcpStream::connect_timeout(&socket_addr, Duration::from_millis(700)).is_ok() {
+            run_client(addr, cmd_rx, event_tx, state);
+            return;
+        }
+    }
+
+    run_host(addr, time_control, cmd_rx, event_tx, state);
 }
 
 fn host_reader_loop(stream: TcpStream, event_tx: Sender<NetworkEvent>) {
@@ -295,6 +367,17 @@ fn format_move_line(prefix: &str, from: Position, to: Position) -> String {
         "{} {} {} {} {}\n",
         prefix, from.row, from.col, to.row, to.col
     )
+}
+
+fn resolve_socket_addr(addr: &str) -> Option<std::net::SocketAddr> {
+    addr.to_socket_addrs().ok()?.next()
+}
+
+fn set_state(state: &Arc<Mutex<SessionState>>, role: SessionRole, local_color: Color) {
+    if let Ok(mut session_state) = state.lock() {
+        session_state.role = role;
+        session_state.local_color = local_color;
+    }
 }
 
 fn format_time_control_line(time_control: TimeControl) -> String {

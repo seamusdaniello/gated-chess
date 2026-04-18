@@ -37,7 +37,7 @@ impl StartMenu {
         self.handle_text_input();
 
         let menu_width = 400.0;
-        let menu_height = 560.0;
+        let menu_height = 640.0;
         let menu_x = (screen_width() - menu_width) / 2.0;
         let menu_y = (screen_height() - menu_height) / 2.0;
 
@@ -107,7 +107,19 @@ impl StartMenu {
             quit_hovered,
         );
 
-        let input_y = menu_y + 430.0;
+        let find_button_y = menu_y + 420.0;
+        let find_hovered =
+            Self::is_button_hovered(button_x, find_button_y, button_width, button_height);
+        Self::draw_button(
+            "Find Match",
+            button_x,
+            find_button_y,
+            button_width,
+            button_height,
+            find_hovered,
+        );
+
+        let input_y = menu_y + 510.0;
         draw_text("Address", button_x, input_y - 12.0, 24.0, LIGHTGRAY);
         draw_rectangle(
             button_x,
@@ -146,6 +158,10 @@ impl StartMenu {
                         server_addr: self.address_input.trim().to_string(),
                     },
                     time_control: STANDARD_TIME_CONTROLS[4],
+                });
+            } else if find_hovered {
+                self.step = StartStep::TimeSelect(SessionConfig::FindMatch {
+                    addr: self.address_input.trim().to_string(),
                 });
             }
         }
@@ -226,7 +242,7 @@ impl StartMenu {
         }
 
         let back_x = menu_x + 64.0;
-        let back_y = menu_y + menu_height - 80.0;
+        let back_y = menu_y + menu_height - 56.0;
         let back_width = 160.0;
         let back_height = 48.0;
         let back_hovered = Self::is_button_hovered(back_x, back_y, back_width, back_height);

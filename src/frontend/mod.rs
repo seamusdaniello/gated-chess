@@ -115,12 +115,17 @@ pub async fn run_ui(mut game: Game) {
             launch_config.time_control,
         )),
         SessionConfig::Join { server_addr } => Some(OnlineSession::join(server_addr.clone())),
+        SessionConfig::FindMatch { addr } => Some(OnlineSession::find_match(
+            addr.clone(),
+            launch_config.time_control,
+        )),
     };
     let mut clock = ChessClock::new(launch_config.time_control, get_time());
     let mut status_message = match &launch_config.session {
         SessionConfig::Local => None,
         SessionConfig::Host { bind_addr } => Some(format!("Hosting on {}", bind_addr)),
         SessionConfig::Join { server_addr } => Some(format!("Connecting to {}", server_addr)),
+        SessionConfig::FindMatch { addr } => Some(format!("Searching for match at {}", addr)),
     };
     let mut status_visible = status_message.is_some();
     let mut status_expire_turn: Option<u32> = status_message.as_ref().map(|_| 1);
