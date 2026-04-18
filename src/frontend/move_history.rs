@@ -9,16 +9,16 @@ struct MoveEntry {
 
 pub struct MoveHistory {
     moves: Vec<MoveEntry>,
-    visible: bool,
     collapsed: bool,
+    open_progress: f32,
 }
 
 impl MoveHistory {
     pub fn new() -> Self {
         Self {
             moves: Vec::new(),
-            visible: true,
             collapsed: false,
+            open_progress: 1.0,
         }
     }
 
@@ -47,36 +47,44 @@ impl MoveHistory {
     }
 
     pub fn draw(&mut self, _tile_size: f32, current_time: f64) {
-        if !self.visible || self.collapsed {
-            self.draw_collapsed_tab();
-            return;
-        }
+        self.update_animation();
 
         let panel_width = 250.0;
         let panel_height = screen_height() - 40.0;
-        let panel_x = screen_width() - panel_width - 20.0;
+        let collapsed_width = 38.0;
+        let panel_width_current =
+            collapsed_width + ((panel_width - collapsed_width) * self.open_progress);
+        let panel_x = screen_width() - panel_width_current - 20.0;
         let panel_y = 20.0;
         let button_size = 26.0;
-        let collapse_x = panel_x + panel_width - (button_size * 2.0) - 18.0;
-        let close_x = panel_x + panel_width - button_size - 10.0;
+        let collapse_x = panel_x + panel_width_current - (button_size * 2.0) - 18.0;
+        let close_x = panel_x + panel_width_current - button_size - 10.0;
         let button_y = panel_y + 8.0;
 
-        // Draw background panel
         draw_rectangle(
             panel_x,
             panel_y,
-            panel_width,
+            panel_width_current,
             panel_height,
             Color::from_rgba(40, 40, 40, 230),
         );
-        draw_rectangle_lines(panel_x, panel_y, panel_width, panel_height, 2.0, WHITE);
+        draw_rectangle_lines(
+            panel_x,
+            panel_y,
+            panel_width_current,
+            panel_height,
+            2.0,
+            WHITE,
+        );
 
-        // Draw title
-        draw_text("Move History", panel_x + 10.0, panel_y + 30.0, 24.0, WHITE);
-        self.draw_button(collapse_x, button_y, button_size, "<");
-        self.draw_button(close_x, button_y, button_size, "X");
+        if self.open_progress > 0.15 {
+            draw_text("Move History", panel_x + 10.0, panel_y + 30.0, 24.0, WHITE);
+            self.draw_button(collapse_x, button_y, button_size, "<");
+            self.draw_button(close_x, button_y, button_size, "X");
+        } else {
+            draw_text("<", panel_x + 10.0, panel_y + 30.0, 28.0, WHITE);
+        }
 
-        // Draw moves
         let start_y = panel_y + 50.0;
         let line_height = 25.0;
         let max_visible = ((panel_height - 60.0) / line_height).floor() as usize;
@@ -86,44 +94,41 @@ impl MoveHistory {
             0
         };
 
-        for (i, entry) in self.moves.iter().enumerate().skip(start_idx) {
-            let move_text = self.format_move(i, entry.from, entry.to);
-            let visible_chars = typed_char_count(&move_text, current_time - entry.added_at, 28.0);
-            let typed_text: String = move_text.chars().take(visible_chars).collect();
-            let y_pos = start_y + ((i - start_idx) as f32 * line_height);
-            draw_text(&typed_text, panel_x + 15.0, y_pos, 20.0, WHITE);
+        if self.open_progress > 0.6 {
+            for (i, entry) in self.moves.iter().enumerate().skip(start_idx) {
+                let move_text = self.format_move(i, entry.from, entry.to);
+                let visible_chars =
+                    typed_char_count(&move_text, current_time - entry.added_at, 28.0);
+                let typed_text: String = move_text.chars().take(visible_chars).collect();
+                let y_pos = start_y + ((i - start_idx) as f32 * line_height);
+                draw_text(&typed_text, panel_x + 15.0, y_pos, 20.0, WHITE);
+            }
         }
 
         if is_mouse_button_pressed(MouseButton::Left) {
-            if is_hovered(collapse_x, button_y, button_size, button_size) {
+            if self.open_progress <= 0.15 && is_hovered(panel_x, panel_y, panel_width_current, 48.0)
+            {
+                self.collapsed = false;
+            } else if self.open_progress > 0.15
+                && is_hovered(collapse_x, button_y, button_size, button_size)
+            {
                 self.collapsed = true;
-            } else if is_hovered(close_x, button_y, button_size, button_size) {
-                self.visible = false;
+            } else if self.open_progress > 0.15
+                && is_hovered(close_x, button_y, button_size, button_size)
+            {
+                self.collapsed = true;
             }
         }
     }
 
-    fn draw_collapsed_tab(&mut self) {
-        let tab_width = 38.0;
-        let tab_height = 48.0;
-        let tab_x = screen_width() - tab_width;
-        let tab_y = 24.0;
+    fn update_animation(&mut self) {
+        let target = if self.collapsed { 0.0 } else { 1.0 };
+        let speed = 8.0 * get_frame_time();
 
-        draw_rectangle(
-            tab_x,
-            tab_y,
-            tab_width,
-            tab_height,
-            Color::from_rgba(40, 40, 40, 230),
-        );
-        draw_rectangle_lines(tab_x, tab_y, tab_width, tab_height, 2.0, WHITE);
-        draw_text("<", tab_x + 10.0, tab_y + 30.0, 28.0, WHITE);
-
-        if is_mouse_button_pressed(MouseButton::Left)
-            && is_hovered(tab_x, tab_y, tab_width, tab_height)
-        {
-            self.visible = true;
-            self.collapsed = false;
+        if self.open_progress < target {
+            self.open_progress = (self.open_progress + speed).min(target);
+        } else if self.open_progress > target {
+            self.open_progress = (self.open_progress - speed).max(target);
         }
     }
 
