@@ -140,6 +140,7 @@ pub async fn run_ui(mut game: Game) {
 
     // Initialize piece animation state
     let mut piece_anim_state = PieceAnimationState::new(0.3); // 10 FPS animation
+    let mut animations_enabled = true;
 
     loop {
         let now = get_time();
@@ -361,6 +362,7 @@ pub async fn run_ui(mut game: Game) {
             &mut piece_anim_state,
             now as f32,
             board_perspective,
+            animations_enabled,
         );
         draw_selected(tile_size);
 
@@ -369,6 +371,7 @@ pub async fn run_ui(mut game: Game) {
         // Draw row numbers after resetting camera (so they're not affected by board rotation)
         draw_row_numbers(board_perspective, tile_size);
         clock.draw(game.current_turn);
+        animations_enabled = draw_animations_checkbox(animations_enabled);
 
         // Process clicks only if game is not over
         let local_turn = can_interact(&session, connection_ready, game.current_turn);
@@ -557,6 +560,31 @@ fn draw_board(
     }
 }
 
+fn draw_animations_checkbox(enabled: bool) -> bool {
+    let box_x = 20.0;
+    let box_y = screen_height() / 2.0 - 15.0;
+    let box_size = 20.0;
+
+    draw_rectangle(box_x, box_y, box_size, box_size, Color::from_rgba(32, 32, 40, 230));
+    draw_rectangle_lines(box_x, box_y, box_size, box_size, 2.0, WHITE);
+
+    if enabled {
+        draw_rectangle(box_x + 4.0, box_y + 4.0, box_size - 8.0, box_size - 8.0, GOLD);
+    }
+
+    draw_text("Animations", box_x + box_size + 8.0, box_y + box_size - 4.0, 20.0, LIGHTGRAY);
+
+    if is_mouse_button_pressed(MouseButton::Left) {
+        let (mx, my) = mouse_position();
+        let label_width = 100.0;
+        if mx >= box_x && mx <= box_x + box_size + label_width && my >= box_y && my <= box_y + box_size {
+            return !enabled;
+        }
+    }
+
+    enabled
+}
+
 fn draw_pieces(
     game: &Game,
     textures: &PieceTextures,
@@ -565,6 +593,7 @@ fn draw_pieces(
     anim_state: &mut PieceAnimationState,
     current_time: f32,
     perspective: PieceColor,
+    animations_enabled: bool,
 ) {
     for row in 0..8 {
         for col in 0..8 {
@@ -573,10 +602,12 @@ fn draw_pieces(
                 let tex = if let Some(frames) =
                     textures.get_animation(piece.kind, piece.color, AnimationState::Idle)
                 {
-                    // Update animation frame
-                    anim_state.update(current_time, frames.len());
-                    // Get current frame
-                    &frames[anim_state.current_frame]
+                    if animations_enabled {
+                        anim_state.update(current_time, frames.len());
+                        &frames[anim_state.current_frame]
+                    } else {
+                        &frames[0]
+                    }
                 } else {
                     // Fall back to static texture if no animation exists
                     match textures.get(piece.kind, piece.color) {
